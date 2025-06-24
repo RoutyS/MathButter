@@ -152,63 +152,79 @@ public class ButterflySubdivision : MonoBehaviour
         verts.Add(mid);
         int index = verts.Count - 1;
         dict[e] = index;
+
+        // -------- Affichage visuel : point ajouté ----------
+        GameObject sphere = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+        sphere.transform.position = mid;
+        sphere.transform.localScale = Vector3.one * 0.03f;
+        sphere.GetComponent<Renderer>().material.color = Color.red;
+        sphere.name = "ButterflyPoint";
+
         return index;
     }
+
 
     bool TryGetButterflyNeighbors(Mesh mesh, Dictionary<Edge, List<int>> edgeToTriangles, Edge edge, out Vector3 A, out Vector3 B, out Vector3 C, out Vector3 D, out Vector3 E, out Vector3 F)
     {
         A = B = C = D = E = F = Vector3.zero;
 
+        if (!edgeToTriangles.TryGetValue(edge, out List<int> triIndices) || triIndices.Count != 2)
+            return false; // Bord => fallback
+
+        int[] triangles = mesh.triangles;
         Vector3[] verts = mesh.vertices;
-        int[] tris = mesh.triangles;
 
-        if (!edgeToTriangles.ContainsKey(edge)) return false;
-        var trisList = edgeToTriangles[edge];
-        if (trisList.Count != 2) return false;
+        // Obtenir les 2 triangles voisins de l'arête
+        int t1 = triIndices[0];
+        int t2 = triIndices[1];
 
-        int t0 = trisList[0];
-        int t1 = trisList[1];
+        int[] tri1 = { triangles[t1], triangles[t1 + 1], triangles[t1 + 2] };
+        int[] tri2 = { triangles[t2], triangles[t2 + 1], triangles[t2 + 2] };
 
-        int[] tri0 = { tris[t0], tris[t0 + 1], tris[t0 + 2] };
-        int[] tri1 = { tris[t1], tris[t1 + 1], tris[t1 + 2] };
+        int v1 = edge.v1;
+        int v2 = edge.v2;
 
-        int other0 = GetThirdVertex(tri0, edge.v1, edge.v2);
-        int other1 = GetThirdVertex(tri1, edge.v1, edge.v2);
+        // Identifie les sommets opposés (non sur l'arête)
+        int a = FindOppositeVertex(tri1, v1, v2);
+        int b = FindOppositeVertex(tri2, v1, v2);
+        A = verts[a];
+        B = verts[b];
 
-        A = verts[other0];
-        B = verts[other1];
+        // C et D : voisins de A dans son triangle
+        GetOtherTwoVertices(tri1, v1, v2, out int c, out int d);
+        C = verts[c];
+        D = verts[d];
 
-        // Trouver C/D autour de A
-        GetTwoOppositeVerts(mesh, other0, edge.v1, edge.v2, out C, out D);
-
-        // Trouver E/F autour de B
-        GetTwoOppositeVerts(mesh, other1, edge.v1, edge.v2, out E, out F);
-
-        Debug.Log($"Butterfly: A={A}, B={B}, C={C}, D={D}, E={E}, F={F}");
-
-        if (!edgeToTriangles.ContainsKey(edge))
-        {
-            Debug.LogWarning("Edge not found in edgeToTriangles");
-            return false;
-        }
-        if (trisList.Count != 2)
-        {
-            Debug.LogWarning($"Edge {edge.v1}-{edge.v2} has {trisList.Count} triangle(s), skipping.");
-            return false;
-        }
-
-        if (trisList.Count != 2)
-        {
-            Debug.LogWarning($"Pas assez de triangles pour l’arête {edge.v1}-{edge.v2}");
-            return false;
-        }
+        // E et F : voisins de B dans son triangle
+        GetOtherTwoVertices(tri2, v1, v2, out int e, out int f);
+        E = verts[e];
+        F = verts[f];
 
         return true;
-
-        
-
-
     }
+
+    int FindOppositeVertex(int[] triangle, int v1, int v2)
+    {
+        foreach (int v in triangle)
+        {
+            if (v != v1 && v != v2)
+                return v;
+        }
+        return -1; // Ne devrait jamais arriver
+    }
+
+    void GetOtherTwoVertices(int[] triangle, int v1, int v2, out int vOther1, out int vOther2)
+    {
+        List<int> result = new List<int>();
+        foreach (int v in triangle)
+        {
+            if (v != v1 && v != v2)
+                result.Add(v);
+        }
+        vOther1 = result[0];
+        vOther2 = result.Count > 1 ? result[1] : result[0];
+    }
+
 
     int GetThirdVertex(int[] triangle, int v1, int v2)
     {

@@ -79,6 +79,30 @@ public class LineDrawer : MonoBehaviour
         {
             ClearPoints();    // NEW : méthode maintenant présente
         }
+
+        // Touche S : Appliquer Butterfly sur la surface Coons
+        if (Input.GetKeyDown(KeyCode.S))
+        {
+            GameObject coons = GameObject.Find("CoonsMesh");
+            if (coons != null)
+            {
+                var bf = FindObjectOfType<ButterflySubdivision>();
+                if (bf != null)
+                {
+                    bf.inputMeshFilter = coons.GetComponent<MeshFilter>();
+                    Debug.Log("CoonsMesh assigné au script ButterflySubdivision !");
+                }
+                else
+                {
+                    Debug.LogWarning("Aucun objet avec le script ButterflySubdivision trouvé dans la scène.");
+                }
+            }
+            else
+            {
+                Debug.LogWarning("Aucun objet nommé 'CoonsMesh' trouvé !");
+            }
+        }
+
     }
 
     // ------------------------------------------------------------------
@@ -252,9 +276,7 @@ public class LineDrawer : MonoBehaviour
         originalLine.positionCount = 0;
         chaikinLine.positionCount = 0;
 
-        // Supprimer sphères si tu en as placé
-        foreach (GameObject go in GameObject.FindGameObjectsWithTag("ChaikinPoint"))
-            Destroy(go);
+        
     }
 
     // ------------------------------------------------------------------
@@ -296,13 +318,25 @@ public class LineDrawer : MonoBehaviour
         lr.startColor = Color.magenta;
         lr.endColor = Color.magenta;
 
+        // Affiche visuellement les points Chaikin validés (magenta)
+        foreach (Vector3 p in validatedPoints)
+        {
+            GameObject point = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+            point.transform.position = p;
+            point.transform.localScale = Vector3.one * 0.05f;
+            point.GetComponent<Renderer>().material.color = Color.magenta;
+            point.name = "ChaikinPoint";
+            point.tag = "ChaikinPoint"; // ✅ tag pour pouvoir supprimer plus tard
+        }
+
+        // Génère la surface si 4 courbes
         if (coonsEdges.Count == 4)
         {
             GenerateCoonsPatch(coonsEdges);
             coonsEdges.Clear();
         }
 
-        StartNewCurve(); // Efface juste la courbe temporaire, pas les précédentes
+        StartNewCurve(); // Efface la courbe temporaire, pas les précédentes
     }
 
 
