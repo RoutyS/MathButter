@@ -1,12 +1,14 @@
 using System.Collections.Generic;
 using UnityEngine;
-using System.Linq;
 
 public class KobbeltSubdivision : MonoBehaviour
 {
     [Header("√3 Subdivision Settings")]
     public int subdivisionLevels = 1;
     public bool autoUpdate = false;
+
+    [Header("Debug")]
+    public bool showDebugInfo = true;
 
     private Mesh originalMesh;
     private MeshFilter meshFilter;
@@ -15,10 +17,10 @@ public class KobbeltSubdivision : MonoBehaviour
     {
         public int v1, v2;
 
-        public Edge(int vertex1, int vertex2)
+        public Edge(int v1, int v2)
         {
-            v1 = Mathf.Min(vertex1, vertex2);
-            v2 = Mathf.Max(vertex1, vertex2);
+            this.v1 = Mathf.Min(v1, v2);
+            this.v2 = Mathf.Max(v1, v2);
         }
 
         public override bool Equals(object obj)
@@ -73,162 +75,245 @@ public class KobbeltSubdivision : MonoBehaviour
         Vector3[] oldVertices = inputMesh.vertices;
         int[] oldTriangles = inputMesh.triangles;
 
-        Debug.Log($"√3-Kobbelt: Input mesh has {oldVertices.Length} vertices, {oldTriangles.Length / 3} triangles");
+        if (showDebugInfo)
+            Debug.Log($"√3-Kobbelt Input: {oldVertices.Length} vertices, {oldTriangles.Length / 3} triangles");
 
-        List<Vector3> newVertices = new List<Vector3>(oldVertices);
-        List<int> newTriangles = new List<int>();
-        Dictionary<int, List<int>> vertexNeighbors = new Dictionary<int, List<int>>();
-        HashSet<Edge> originalEdges = new HashSet<Edge>();
+        // Étape 1: Analyser la topologie
+        var topology = AnalyzeTopology(oldVertices, oldTriangles);
 
-        BuildOriginalTopology(oldTriangles, vertexNeighbors, originalEdges);
+        // Étape 2: Créer les centres de triangles et subdiviser
+        var subdivisionResult = CreateSubdividedMesh(oldVertices, oldTriangles);
 
-        for (int i = 0; i < oldTriangles.Length; i += 3)
-        {
-            int v1 = oldTriangles[i];
-            int v2 = oldTriangles[i + 1];
-            int v3 = oldTriangles[i + 2];
+        // Étape 3: Perturber les vertices originaux
+        Vector3[] newVertices = PerturbVertices(subdivisionResult.vertices.ToArray(),
+                                               topology.vertexNeighbors,
+                                               oldVertices.Length);
 
-            Vector3 center = (oldVertices[v1] + oldVertices[v2] + oldVertices[v3]) / 3f;
-            int centerIndex = newVertices.Count;
-            newVertices.Add(center);
+        // Étape 4: Appliquer le flipping des arêtes
+        var finalResult = ApplyEdgeFlipping(newVertices, subdivisionResult.triangles.ToArray(),
+                                          oldTriangles, oldVertices.Length);
 
-            newTriangles.AddRange(new int[] { v1, v2, centerIndex });
-            newTriangles.AddRange(new int[] { v2, v3, centerIndex });
-            newTriangles.AddRange(new int[] { v3, v1, centerIndex });
-        }
-
-        PerturbOriginalVertices(oldVertices, vertexNeighbors, newVertices);
-
-        // ✅ Correction ici : passe newVertices à FlipOriginalEdges
-        FlipOriginalEdges(newTriangles, originalEdges, oldVertices.Length, newVertices);
-
-        Debug.Log($"√3-Kobbelt: Output mesh has {newVertices.Count} vertices, {newTriangles.Count / 3} triangles");
+        if (showDebugInfo)
+            Debug.Log($"√3-Kobbelt Output: {finalResult.vertices.Count} vertices, {finalResult.triangles.Count / 3} triangles");
 
         Mesh newMesh = new Mesh();
-        newMesh.vertices = newVertices.ToArray();
-        newMesh.triangles = newTriangles.ToArray();
+        newMesh.vertices = finalResult.vertices.ToArray();
+        newMesh.triangles = finalResult.triangles.ToArray();
         newMesh.RecalculateNormals();
         newMesh.RecalculateBounds();
 
         return newMesh;
     }
 
-    void BuildOriginalTopology(int[] triangles, Dictionary<int, List<int>> vertexNeighbors, HashSet<Edge> originalEdges)
+    struct MeshTopology
     {
-        HashSet<int> allVertices = new HashSet<int>(triangles);
-        foreach (int vertex in allVertices)
-        {
-            vertexNeighbors[vertex] = new List<int>();
-        }
+        public Dictionary<int, List<int>> vertexNeighbors;
+        public Dictionary<Edge, List<int>> edgeToTriangles;
+        public List<Edge> boundaryEdges;
+    }
 
+    MeshTopology AnalyzeTopology(Vector3[] vertices, int[] triangles)
+    {
+        var topology = new MeshTopology
+        {
+            vertexNeighbors = new Dictionary<int, List<int>>(),
+            edgeToTriangles = new Dictionary<Edge, List<int>>(),
+            boundaryEdges = new List<Edge>()
+        };
+
+        // Initialiser les listes de voisins
+        for (int i = 0; i < vertices.Length; i++)
+            topology.vertexNeighbors[i] = new List<int>();
+
+        // Analyser chaque triangle
         for (int i = 0; i < triangles.Length; i += 3)
         {
-            int v1 = triangles[i];
-            int v2 = triangles[i + 1];
-            int v3 = triangles[i + 2];
+            int v0 = triangles[i];
+            int v1 = triangles[i + 1];
+            int v2 = triangles[i + 2];
+            int triIndex = i / 3;
 
-            AddNeighborBidirectional(vertexNeighbors, v1, v2);
-            AddNeighborBidirectional(vertexNeighbors, v2, v3);
-            AddNeighborBidirectional(vertexNeighbors, v3, v1);
+            // Ajouter les voisins
+            AddNeighbor(topology.vertexNeighbors, v0, v1);
+            AddNeighbor(topology.vertexNeighbors, v1, v2);
+            AddNeighbor(topology.vertexNeighbors, v2, v0);
 
-            originalEdges.Add(new Edge(v1, v2));
-            originalEdges.Add(new Edge(v2, v3));
-            originalEdges.Add(new Edge(v3, v1));
+            // Associer les arêtes aux triangles
+            AddEdgeTriangle(topology.edgeToTriangles, new Edge(v0, v1), triIndex);
+            AddEdgeTriangle(topology.edgeToTriangles, new Edge(v1, v2), triIndex);
+            AddEdgeTriangle(topology.edgeToTriangles, new Edge(v2, v0), triIndex);
         }
+
+        // Identifier les arêtes de frontière
+        foreach (var kvp in topology.edgeToTriangles)
+            if (kvp.Value.Count == 1)
+                topology.boundaryEdges.Add(kvp.Key);
+
+        return topology;
     }
 
-    void AddNeighborBidirectional(Dictionary<int, List<int>> vertexNeighbors, int v1, int v2)
+    void AddNeighbor(Dictionary<int, List<int>> neighbors, int v1, int v2)
     {
-        if (!vertexNeighbors[v1].Contains(v2))
-            vertexNeighbors[v1].Add(v2);
-        if (!vertexNeighbors[v2].Contains(v1))
-            vertexNeighbors[v2].Add(v1);
+        if (!neighbors[v1].Contains(v2)) neighbors[v1].Add(v2);
+        if (!neighbors[v2].Contains(v1)) neighbors[v2].Add(v1);
     }
 
-    void PerturbOriginalVertices(Vector3[] oldVertices, Dictionary<int, List<int>> vertexNeighbors, List<Vector3> newVertices)
+    void AddEdgeTriangle(Dictionary<Edge, List<int>> dict, Edge e, int tri)
     {
-        for (int i = 0; i < oldVertices.Length; i++)
+        if (!dict.ContainsKey(e))
+            dict[e] = new List<int>();
+        dict[e].Add(tri);
+    }
+
+    struct SubdivisionResult
+    {
+        public List<Vector3> vertices;
+        public List<int> triangles;
+    }
+
+    // Étape 1: Créer la subdivision initiale (1->3 triangles)
+    SubdivisionResult CreateSubdividedMesh(Vector3[] oldVertices, int[] oldTriangles)
+    {
+        var result = new SubdivisionResult
         {
-            List<int> neighbors = vertexNeighbors[i];
-            int n = neighbors.Count;
+            vertices = new List<Vector3>(oldVertices),
+            triangles = new List<int>()
+        };
 
-            float alpha = CalculateKobbeltAlpha(n);
+        // Pour chaque triangle, créer le centre et 3 nouveaux triangles
+        for (int i = 0; i < oldTriangles.Length; i += 3)
+        {
+            int v0 = oldTriangles[i];
+            int v1 = oldTriangles[i + 1];
+            int v2 = oldTriangles[i + 2];
 
+            // Calculer le centre du triangle
+            Vector3 center = (oldVertices[v0] + oldVertices[v1] + oldVertices[v2]) / 3f;
+            int centerIndex = result.vertices.Count;
+            result.vertices.Add(center);
+
+            // Créer 3 triangles en préservant l'orientation du triangle original
+            // Chaque triangle va du centre vers une arête, dans le sens du triangle original
+            result.triangles.AddRange(new int[] { v0, v1, centerIndex });
+            result.triangles.AddRange(new int[] { v1, v2, centerIndex });
+            result.triangles.AddRange(new int[] { v2, v0, centerIndex });
+        }
+
+        return result;
+    }
+
+    // Étape 2: Perturber les vertices originaux
+    Vector3[] PerturbVertices(Vector3[] allVertices, Dictionary<int, List<int>> neighbors, int originalVertexCount)
+    {
+        Vector3[] result = new Vector3[allVertices.Length];
+
+        // Copier tous les vertices
+        for (int i = 0; i < allVertices.Length; i++)
+            result[i] = allVertices[i];
+
+        // Perturber seulement les vertices originaux
+        for (int i = 0; i < originalVertexCount; i++)
+        {
+            if (!neighbors.ContainsKey(i)) continue;
+
+            var neighborList = neighbors[i];
+            int n = neighborList.Count;
+
+            if (n == 0) continue;
+
+            // Calculer alpha selon la formule de Kobbelt
+            float alpha = (4f - 2f * Mathf.Cos(2f * Mathf.PI / n)) / (9f * n);
+            alpha = Mathf.Max(0f, alpha);
+
+            // Calculer la somme des voisins
             Vector3 neighborSum = Vector3.zero;
-            foreach (int neighborIndex in neighbors)
-            {
-                neighborSum += oldVertices[neighborIndex];
-            }
+            foreach (int j in neighborList)
+                neighborSum += allVertices[j];
 
-            Vector3 perturbedVertex = (1f - n * alpha) * oldVertices[i] + alpha * neighborSum;
-            newVertices[i] = perturbedVertex;
+            // Appliquer la perturbation
+            result[i] = (1f - n * alpha) * allVertices[i] + alpha * neighborSum;
         }
+
+        return result;
     }
 
-    float CalculateKobbeltAlpha(int n)
+    // Étape 3: Appliquer le flipping des arêtes
+    SubdivisionResult ApplyEdgeFlipping(Vector3[] vertices, int[] triangles, int[] originalTriangles, int originalVertexCount)
     {
-        if (n <= 0) return 0f;
-        float cosTerm = Mathf.Cos((2f * Mathf.PI) / n);
-        float alpha = (1f / (9f * n)) * (4f - 2f * cosTerm);
-        return alpha;
+        var result = new SubdivisionResult
+        {
+            vertices = new List<Vector3>(vertices),
+            triangles = new List<int>()
+        };
+
+        // Construire une map des arêtes originales vers les centres des triangles adjacents
+        Dictionary<Edge, EdgeInfo> originalEdgeInfo = new Dictionary<Edge, EdgeInfo>();
+
+        for (int i = 0; i < originalTriangles.Length; i += 3)
+        {
+            int v0 = originalTriangles[i];
+            int v1 = originalTriangles[i + 1];
+            int v2 = originalTriangles[i + 2];
+            int centerIndex = originalVertexCount + (i / 3); // Index du centre de ce triangle
+
+            // Pour chaque arête, stocker l'information avec l'orientation correcte
+            AddEdgeInfo(originalEdgeInfo, v0, v1, centerIndex);
+            AddEdgeInfo(originalEdgeInfo, v1, v2, centerIndex);
+            AddEdgeInfo(originalEdgeInfo, v2, v0, centerIndex);
+        }
+
+        // Créer les nouveaux triangles avec flipping
+        foreach (var kvp in originalEdgeInfo)
+        {
+            EdgeInfo info = kvp.Value;
+
+            if (info.centers.Count == 2)
+            {
+                // Arête interne: créer 2 triangles en connectant les centres
+                // Préserver l'orientation en utilisant l'ordre original des vertices
+                int c1 = info.centers[0];
+                int c2 = info.centers[1];
+
+                result.triangles.AddRange(new int[] { info.v1, c1, c2 });
+                result.triangles.AddRange(new int[] { c2, c1, info.v2 });
+            }
+            else if (info.centers.Count == 1)
+            {
+                // Arête de frontière: créer 1 triangle
+                int c = info.centers[0];
+                result.triangles.AddRange(new int[] { info.v1, info.v2, c });
+            }
+        }
+
+        return result;
     }
 
-    // ✅ Fonction corrigée ici
-    void FlipOriginalEdges(List<int> triangles, HashSet<Edge> originalEdges, int originalVertexCount, List<Vector3> vertices)
+    struct EdgeInfo
     {
-        var edgeToTriangles = new Dictionary<Edge, List<int>>();
+        public int v1, v2;
+        public List<int> centers;
+    }
 
-        for (int i = 0; i < triangles.Count; i += 3)
+    void AddEdgeInfo(Dictionary<Edge, EdgeInfo> dict, int v1, int v2, int center)
+    {
+        Edge edge = new Edge(v1, v2);
+
+        if (!dict.ContainsKey(edge))
         {
-            int a = triangles[i], b = triangles[i + 1], c = triangles[i + 2];
-            foreach (var pair in new[] { (a, b), (b, c), (c, a) })
+            dict[edge] = new EdgeInfo
             {
-                var e = new Edge(pair.Item1, pair.Item2);
-                if (!edgeToTriangles.ContainsKey(e))
-                    edgeToTriangles[e] = new List<int>();
-                edgeToTriangles[e].Add(i);
-            }
+                v1 = v1,
+                v2 = v2,
+                centers = new List<int>()
+            };
         }
-
-        var flipped = new List<int>();
-        int badCount = 0;
-
-        foreach (var edge in originalEdges)
-        {
-            if (!edgeToTriangles.TryGetValue(edge, out var tris) || tris.Count != 2)
-                continue;
-
-            var t0 = tris[0]; var t1 = tris[1];
-            var tri0 = new[] { triangles[t0], triangles[t0 + 1], triangles[t0 + 2] };
-            var tri1 = new[] { triangles[t1], triangles[t1 + 1], triangles[t1 + 2] };
-
-            int c0 = tri0.FirstOrDefault(v => v >= originalVertexCount);
-            int c1 = tri1.FirstOrDefault(v => v >= originalVertexCount);
-            if (c0 < originalVertexCount || c1 < originalVertexCount)
-            {
-                badCount++;
-                continue;
-            }
-
-            Vector3 p0 = vertices[edge.v1];
-            Vector3 p1 = vertices[edge.v2];
-            Vector3 q0 = vertices[c0];
-            Vector3 q1 = vertices[c1];
-
-            flipped.AddRange(new[] { c0, c1, edge.v1 });
-            flipped.AddRange(new[] { c0, c1, edge.v2 });
-        }
-
-        Debug.Log($"Flip: {flipped.Count / 3} triangles générés, {badCount} arêtes ignorées (pas de centre).");
-        triangles.AddRange(flipped);
+        dict[edge].centers.Add(center);
     }
 
     [ContextMenu("Reset to Original")]
     public void ResetToOriginal()
     {
         if (originalMesh != null)
-        {
             meshFilter.mesh = Instantiate(originalMesh);
-        }
     }
 }
