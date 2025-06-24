@@ -1,4 +1,5 @@
 ﻿using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 using static Unity.VisualScripting.Member;
 
@@ -21,7 +22,12 @@ public class LineDrawer : MonoBehaviour
     private LineRenderer chaikinLine;
 
     // ----- Stockage courbes -----
-    private List<List<Vector3>> coonsEdges = new List<List<Vector3>>(); 
+    private List<List<Vector3>> coonsEdges = new List<List<Vector3>>();
+
+    private Vector3? nextStartPoint = null;
+    private Vector3? finalEndPoint = null;
+
+
 
 
     void Start()
@@ -49,6 +55,8 @@ public class LineDrawer : MonoBehaviour
         chaikinLine.startColor = Color.cyan;
         chaikinLine.endColor = Color.cyan;
         chaikinLine.material = new Material(Shader.Find("Sprites/Default"));
+
+
 
     }
 
@@ -110,44 +118,113 @@ public class LineDrawer : MonoBehaviour
     // ------------------------------------------------------------------
     void AddPoint(Vector3 point)
     {
+        originalLine.positionCount = originalPoints.Count;
+        originalLine.SetPositions(originalPoints.ToArray());
+
+
+        if (nextStartPoint.HasValue)
+        {
+            originalPoints.Clear();
+            originalPoints.Add(nextStartPoint.Value);
+            nextStartPoint = null;
+
+            // Affiche le premier point de la nouvelle courbe
+            originalLine.positionCount = originalPoints.Count;
+            originalLine.SetPositions(originalPoints.ToArray());
+
+            CreatePointSphere(point, Color.red);
+
+        }
+
+
         originalPoints.Add(point);
 
         originalLine.positionCount = originalPoints.Count;
         originalLine.SetPositions(originalPoints.ToArray());
 
-        if (pointPrefab != null)
+        CreatePointSphere(originalPoints[0], Color.red);
+
+
+        if (coonsEdges.Count == 3 && finalEndPoint.HasValue && originalPoints.Count >= 2 && !originalPoints.Contains(finalEndPoint.Value))
+
         {
-            // Facultatif : donne un tag pour pouvoir les supprimer au Reset
-            GameObject p = Instantiate(pointPrefab, point, Quaternion.identity);
-            p.tag = "ChaikinPoint";
+            originalPoints.Add(finalEndPoint.Value); // Fin imposée
+            finalEndPoint = null;
         }
+
     }
+
 
     // ------------------------------------------------------------------
     //  APPEL PUBLIC : génère la courbe Chaikin et l’affiche
     // ------------------------------------------------------------------
+    // ------------------- AJOUT / REMPLACEMENT complet -------------------
     void ApplyChaikin()
     {
         if (originalPoints.Count < 2) return;
 
         List<Vector3> smooth = ChaikinSubdivision(originalPoints, chaikinIterations);
 
+        // Affichage
         chaikinLine.positionCount = smooth.Count;
         chaikinLine.SetPositions(smooth.ToArray());
 
-        // Ajouter cette courbe à la liste pour la surface de Coons
-        if (coonsEdges.Count < 4)
+        foreach (Vector3 p in smooth)
+            CreatePointSphere(p, Color.gray);
+
+        // Stockage avec orientation corrigée
+        switch (coonsEdges.Count)
         {
-            coonsEdges.Add(new List<Vector3>(smooth));
-            Debug.Log($"Courbe {coonsEdges.Count}/4 ajoutée !");
+            case 0: // Bordure BAS : gauche → droite (OK)
+                coonsEdges.Add(new List<Vector3>(smooth));
+                Debug.Log($"✔ Bordure BAS ajoutée : {smooth[0]} → {smooth[smooth.Count - 1]}");
+                break;
+
+            case 1: // Bordure DROITE : bas → haut (OK) 
+                coonsEdges.Add(new List<Vector3>(smooth));
+                Debug.Log($"✔ Bordure DROITE ajoutée : {smooth[0]} → {smooth[smooth.Count - 1]}");
+                break;
+
+            case 2: // Bordure HAUT : droite → gauche, donc on inverse pour avoir gauche → droite
+                smooth.Reverse();
+                coonsEdges.Add(new List<Vector3>(smooth));
+                Debug.Log($"✔ Bordure HAUT ajoutée (inversée) : {smooth[0]} → {smooth[smooth.Count - 1]}");
+                break;
+
+            case 3: // Bordure GAUCHE : haut → bas, donc on inverse pour avoir bas → haut  
+                smooth.Reverse();
+                coonsEdges.Add(new List<Vector3>(smooth));
+                Debug.Log($"✔ Bordure GAUCHE ajoutée (inversée) : {smooth[0]} → {smooth[smooth.Count - 1]}");
+                break;
         }
 
+        // Génération quand on a les 4 courbes
         if (coonsEdges.Count == 4)
         {
-            GenerateCoonsPatch(coonsEdges);
-            coonsEdges.Clear(); // reset pour recommencer
+            // Vérification de la cohérence des coins
+            Debug.Log("=== VÉRIFICATION DE LA COHÉRENCE DES COINS ===");
+            Debug.Log($"Bas-gauche: {coonsEdges[0][0]} vs Gauche-bas: {coonsEdges[3][0]}");
+            Debug.Log($"Bas-droite: {coonsEdges[0][coonsEdges[0].Count - 1]} vs Droite-bas: {coonsEdges[1][0]}");
+            Debug.Log($"Haut-droite: {coonsEdges[2][0]} vs Droite-haut: {coonsEdges[1][coonsEdges[1].Count - 1]}");
+            Debug.Log($"Haut-gauche: {coonsEdges[2][coonsEdges[2].Count - 1]} vs Gauche-haut: {coonsEdges[3][coonsEdges[3].Count - 1]}");
+
+            int n = coonsEdges[0].Count;
+            bool ok = coonsEdges.TrueForAll(c => c.Count == n);
+
+            if (!ok)
+            {
+                Debug.LogError("x Les 4 courbes n'ont pas le même nombre de points.");
+            }
+            else
+            {
+                GenerateCoonsPatch(coonsEdges);
+                Debug.Log("v Surface de Coons générée avec succès !");
+            }
+
+            coonsEdges.Clear();
         }
     }
+
 
     // ------------------------------------------------------------------
     // Générer la surface de Coons
@@ -155,11 +232,27 @@ public class LineDrawer : MonoBehaviour
 
     void GenerateCoonsPatch(List<List<Vector3>> edges)
     {
-        int resolution = edges[0].Count; // suppose qu'elles ont toutes le même nb de points
-        GameObject parent = new GameObject("CoonsSurface");
+        int resolution = edges[0].Count;
+
+        // Vérification des coins pour déboguer
+        Vector3 p00 = edges[0][0];                    // coin bas-gauche
+        Vector3 p01 = edges[0][resolution - 1];       // coin bas-droite  
+        Vector3 p10 = edges[2][resolution - 1];       // coin haut-droite (ATTENTION: inversé)
+        Vector3 p11 = edges[2][0];                    // coin haut-gauche (ATTENTION: inversé)
+
+        Debug.Log($"Coins de contrôle:");
+        Debug.Log($"P00 (bas-gauche): {p00}");
+        Debug.Log($"P01 (bas-droite): {p01}");
+        Debug.Log($"P10 (haut-droite): {p10}");
+        Debug.Log($"P11 (haut-gauche): {p11}");
+
+        // Créer des sphères pour visualiser les coins
+        CreatePointSphere(p00, Color.red);      // bas-gauche
+        CreatePointSphere(p01, Color.green);    // bas-droite
+        CreatePointSphere(p10, Color.blue);     // haut-droite
+        CreatePointSphere(p11, Color.yellow);   // haut-gauche
 
         List<List<Vector3>> grid = new List<List<Vector3>>();
-
 
         for (int i = 0; i < resolution; i++)
         {
@@ -170,32 +263,73 @@ public class LineDrawer : MonoBehaviour
             {
                 float v = j / (float)(resolution - 1);
 
-                // Bordures
-                Vector3 bottom = edges[0][j];
-                Vector3 top = edges[1][j];
-                Vector3 left = edges[2][i];
-                Vector3 right = edges[3][i];
+                // Évaluation des courbes de bordure
+                Vector3 c0 = EvaluateCurveAtParameter(edges[0], u);  // bordure bas (u varie)
+                Vector3 c1 = EvaluateCurveAtParameter(edges[2], u);  // bordure haut (u varie, mais inversée)
+                Vector3 d0 = EvaluateCurveAtParameter(edges[3], v);  // bordure gauche (v varie, mais inversée) 
+                Vector3 d1 = EvaluateCurveAtParameter(edges[1], v);  // bordure droite (v varie)
 
-                // Coins
-                Vector3 p00 = edges[0][0];
-                Vector3 p01 = edges[0][resolution - 1];
-                Vector3 p10 = edges[1][0];
-                Vector3 p11 = edges[1][resolution - 1];
+                // FORMULE DE COONS CORRIGÉE
+                // S(u,v) = (1-v)*c0(u) + v*c1(u) + (1-u)*d0(v) + u*d1(v) 
+                //          - [(1-u)*(1-v)*P00 + u*(1-v)*P01 + (1-u)*v*P11 + u*v*P10]
 
-                // Coons patch
-                Vector3 S = (1 - v) * bottom + v * top +
-                            (1 - u) * left + u * right -
-                            ((1 - u) * (1 - v) * p00 + (1 - u) * v * p01 + u * (1 - v) * p10 + u * v * p11);
+                Vector3 ruled_uv = (1 - v) * c0 + v * c1;           // interpolation entre bordures bas/haut
+                Vector3 ruled_vu = (1 - u) * d0 + u * d1;           // interpolation entre bordures gauche/droite
+
+                // Correction bilinéaire des coins
+                Vector3 bilinear = (1 - u) * (1 - v) * p00 +        // influence coin bas-gauche
+                                  u * (1 - v) * p01 +                // influence coin bas-droite  
+                                  (1 - u) * v * p11 +                // influence coin haut-gauche
+                                  u * v * p10;                       // influence coin haut-droite
+
+                // Surface de Coons finale
+                Vector3 S = ruled_uv + ruled_vu - bilinear;
 
                 row.Add(S);
             }
-
             grid.Add(row);
         }
 
         GenerateMeshFromPoints(grid);
-
     }
+
+    Vector3 EvaluateCurveAtParameter(List<Vector3> curve, float t)
+    {
+        if (curve.Count == 0) return Vector3.zero;
+        if (curve.Count == 1) return curve[0];
+
+        // Assurer que t est dans [0,1]
+        t = Mathf.Clamp01(t);
+
+        // Calcul de l'index exact
+        float exactIndex = t * (curve.Count - 1);
+        int baseIndex = Mathf.FloorToInt(exactIndex);
+        float localT = exactIndex - baseIndex;
+
+        // Cas limite
+        if (baseIndex >= curve.Count - 1)
+            return curve[curve.Count - 1];
+
+        // Interpolation linéaire
+        return Vector3.Lerp(curve[baseIndex], curve[baseIndex + 1], localT);
+    }
+
+
+    // Interpolation linéaire dans une liste de points
+    Vector3 EvaluateCurve(List<Vector3> curve, float t)
+    {
+        int count = curve.Count;
+        if (count == 0) return Vector3.zero;
+
+        float scaledT = t * (count - 1);
+        int index = Mathf.FloorToInt(scaledT);
+        float localT = scaledT - index;
+
+        if (index >= count - 1) return curve[count - 1];
+
+        return Vector3.Lerp(curve[index], curve[index + 1], localT);
+    }
+
 
     // ------------------------------------------------------------------
     // Generation de mesh a partir des points 
@@ -290,6 +424,7 @@ public class LineDrawer : MonoBehaviour
         List<Vector3> smooth = ChaikinSubdivision(originalPoints, chaikinIterations);
         chaikinLine.positionCount = smooth.Count;
         chaikinLine.SetPositions(smooth.ToArray());
+
     }
 
     // ------------------------------------------------------------------
@@ -298,46 +433,45 @@ public class LineDrawer : MonoBehaviour
 
     void ValidateCurrentCurve()
     {
-        if (chaikinLine.positionCount == 0) return;
+        if (originalPoints.Count < 2) return;
 
-        // Sauvegarde la courbe actuelle
-        List<Vector3> validatedPoints = new List<Vector3>();
-        for (int i = 0; i < chaikinLine.positionCount; i++)
-            validatedPoints.Add(chaikinLine.GetPosition(i));
-
-        coonsEdges.Add(validatedPoints);
-        Debug.Log($"Courbe {coonsEdges.Count}/4 validée.");
-
-        // Garde une copie visible
-        GameObject copy = new GameObject("StoredCurve_" + coonsEdges.Count);
-        LineRenderer lr = copy.AddComponent<LineRenderer>();
-        lr.positionCount = validatedPoints.Count;
-        lr.SetPositions(validatedPoints.ToArray());
-        lr.widthMultiplier = 0.05f;
-        lr.material = new Material(Shader.Find("Sprites/Default"));
-        lr.startColor = Color.magenta;
-        lr.endColor = Color.magenta;
-
-        // Affiche visuellement les points Chaikin validés (magenta)
-        foreach (Vector3 p in validatedPoints)
+        //  Courbe 4 : Ajouter manuellement début et fin
+        if (coonsEdges.Count == 3 && finalEndPoint.HasValue)
         {
-            GameObject point = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-            point.transform.position = p;
-            point.transform.localScale = Vector3.one * 0.05f;
-            point.GetComponent<Renderer>().material.color = Color.magenta;
-            point.name = "ChaikinPoint";
-            point.tag = "ChaikinPoint"; // ✅ tag pour pouvoir supprimer plus tard
+            // Forcer le début (juste au cas où)
+            Vector3 forcedStart = coonsEdges[0][0];
+            if (originalPoints.Count == 0 || originalPoints[0] != forcedStart)
+                originalPoints.Insert(0, forcedStart);
+
+            // Forcer la fin avec homothétie
+            Vector3 lastPoint = originalPoints[originalPoints.Count - 1];           // point cliqué par l’utilisateur
+            Vector3 beforeLast = originalPoints[originalPoints.Count - 2];          // point précédent
+            Vector3 target = finalEndPoint.Value;
+
+            float lambda = 1f; // 1 → point exactement au bon endroit
+            Vector3 adjusted = (1 - lambda) * beforeLast + lambda * target;
+
+            // Remplacer le dernier point par le bon
+            originalPoints[originalPoints.Count - 1] = adjusted;
+            CreatePointSphere(adjusted, Color.red);
+
+            Debug.Log($"✅ Dernier point replacé par homothétie vers {target}");
         }
 
-        // Génère la surface si 4 courbes
-        if (coonsEdges.Count == 4)
-        {
-            GenerateCoonsPatch(coonsEdges);
-            coonsEdges.Clear();
-        }
 
-        StartNewCurve(); // Efface la courbe temporaire, pas les précédentes
+
+        ApplyChaikin(); // maintenant on a les 4 coins
+
+        // Préparer le prochain départ
+        if (coonsEdges.Count < 4)
+            nextStartPoint = originalPoints[originalPoints.Count - 1];
+
+        originalPoints.Clear();
+        originalLine.positionCount = 0;
+        chaikinLine.positionCount = 0;
     }
+
+
 
 
 
@@ -355,6 +489,10 @@ public class LineDrawer : MonoBehaviour
         {
             List<Vector3> next = new List<Vector3>();
 
+            // ✅ CONSERVER le premier point
+            next.Add(pts[0]);
+
+            // Générer les points intermédiaires
             for (int i = 0; i < pts.Count - 1; i++)
             {
                 Vector3 p0 = pts[i];
@@ -366,6 +504,10 @@ public class LineDrawer : MonoBehaviour
                 next.Add(Q);
                 next.Add(R);
             }
+
+            // ✅ CONSERVER le dernier point
+            next.Add(pts[pts.Count - 1]);
+
             pts = next;
         }
         return pts;
@@ -384,4 +526,20 @@ public class LineDrawer : MonoBehaviour
         foreach (GameObject go in GameObject.FindGameObjectsWithTag("ChaikinPoint"))
             Destroy(go);
     }
+
+    // ------------------------------------------------------------------
+    //  Instancie une sphère de contrôle et lui applique la couleur voulue
+    // ------------------------------------------------------------------
+    void CreatePointSphere(Vector3 position, Color color)
+    {
+        if (pointPrefab == null) return;
+
+        GameObject p = Instantiate(pointPrefab, position, Quaternion.identity);
+        p.tag = "ChaikinPoint";
+
+        Renderer r = p.GetComponent<Renderer>();
+        if (r != null)
+            r.material.color = color;
+    }
+
 }
