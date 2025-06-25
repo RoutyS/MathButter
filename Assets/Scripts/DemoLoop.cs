@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 public class DemoLoop : MonoBehaviour
@@ -6,10 +7,46 @@ public class DemoLoop : MonoBehaviour
     public Material loopMaterial;
     public bool showWireframes = true;
     public int subdivisionLevels = 1;
+    public Mesh inputMesh;
 
     void Start()
     {
-        CreateLoopCube();
+        if (inputMesh != null)
+        {
+            CreateLoopObject(inputMesh, "Loop Subdivision Object");
+        }
+        else
+        {
+            Debug.LogWarning("Aucun mesh assigné, création d'un cube par défaut");
+            CreateLoopCube();
+        }
+    }
+    void CreateLoopObject(Mesh mesh, string name)
+    {
+        GameObject obj = new GameObject(name);
+        obj.transform.position = Vector3.zero;
+
+        MeshFilter meshFilter = obj.AddComponent<MeshFilter>();
+        MeshRenderer meshRenderer = obj.AddComponent<MeshRenderer>();
+
+        meshFilter.mesh = mesh;
+
+        if (loopMaterial != null)
+        {
+            meshRenderer.material = loopMaterial;
+        }
+        else
+        {
+            Material loopMat = new Material(Shader.Find("Standard"));
+            loopMat.color = Color.cyan;
+            meshRenderer.material = loopMat;
+        }
+
+        Loop loopScript = obj.AddComponent<Loop>();
+        loopScript.subdivisionLevels = subdivisionLevels;
+
+   
+        SetupCamera();
     }
 
     void CreateLoopCube()
@@ -46,6 +83,7 @@ public class DemoLoop : MonoBehaviour
         // Centrer la caméra sur ce cube
         SetupCamera();
     }
+    
 
     Mesh CreateTriangulatedCubeMesh()
     {

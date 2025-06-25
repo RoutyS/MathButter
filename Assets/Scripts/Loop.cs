@@ -48,7 +48,7 @@ public class Loop : MonoBehaviour
         }
         
         // Sauvegarder le mesh original
-        originalMesh = Instantiate(meshFilter.mesh);
+        originalMesh = Weld(Instantiate(meshFilter.mesh));
         
         // Appliquer la subdivision
         ApplyLoopSubdivision();
@@ -86,15 +86,20 @@ public class Loop : MonoBehaviour
         Dictionary<Edge, int> edgeToNewVertex = new Dictionary<Edge, int>();
         Dictionary<Edge, List<int>> edgeToTriangles = new Dictionary<Edge, List<int>>();
         Dictionary<int, List<int>> vertexNeighbors = new Dictionary<int, List<int>>();
+        HashSet<int> boundaryVertices = new HashSet<int>();
+        HashSet<Edge> boundaryEdges = new HashSet<Edge>();
         
-        BuildTopology(oldTriangles, edgeToTriangles, vertexNeighbors);
+        BuildTopology(oldTriangles, edgeToTriangles, vertexNeighbors, boundaryVertices, boundaryEdges);
+        
+        // Debug info
+        Debug.Log($"Mesh info: {oldVertices.Length} vertices, {oldTriangles.Length/3} triangles, {boundaryEdges.Count} boundary edges, {boundaryVertices.Count} boundary vertices");
         
         // 2. Calculer les nouveaux points d'arête
         List<Vector3> newVertices = new List<Vector3>(oldVertices);
-        CalculateEdgePoints(oldVertices, oldTriangles, edgeToTriangles, edgeToNewVertex, newVertices);
+        CalculateEdgePoints(oldVertices, oldTriangles, edgeToTriangles, boundaryEdges, edgeToNewVertex, newVertices);
         
         // 3. Calculer les nouveaux points de vertex
-        CalculateVertexPoints(oldVertices, vertexNeighbors, newVertices);
+        CalculateVertexPoints(oldVertices, vertexNeighbors, boundaryVertices, boundaryEdges, newVertices);
         
         // 4. Construire les nouveaux triangles
         List<int> newTriangles = new List<int>();
@@ -111,7 +116,8 @@ public class Loop : MonoBehaviour
     }
     
     void BuildTopology(int[] triangles, Dictionary<Edge, List<int>> edgeToTriangles, 
-                      Dictionary<int, List<int>> vertexNeighbors)
+                      Dictionary<int, List<int>> vertexNeighbors,
+                      HashSet<int> boundaryVertices, HashSet<Edge> boundaryEdges)
     {
         // Initialiser le dictionnaire des voisins
         for (int i = 0; i < triangles.Length; i++)
@@ -142,6 +148,18 @@ public class Loop : MonoBehaviour
             AddNeighbor(vertexNeighbors, v2, v0);
             AddNeighbor(vertexNeighbors, v2, v1);
         }
+        
+        // Identifier les arêtes et vertices de bordure
+        foreach (var kvp in edgeToTriangles)
+        {
+            if (kvp.Value.Count == 1)
+            {
+                Edge edge = kvp.Key;
+                boundaryEdges.Add(edge);
+                boundaryVertices.Add(edge.v1);
+                boundaryVertices.Add(edge.v2);
+            }
+        }
     }
     
     void AddEdgeToTriangle(Edge edge, int triangleIndex, Dictionary<Edge, List<int>> edgeToTriangles)
@@ -159,6 +177,7 @@ public class Loop : MonoBehaviour
     
     void CalculateEdgePoints(Vector3[] oldVertices, int[] oldTriangles, 
                            Dictionary<Edge, List<int>> edgeToTriangles, 
+                           HashSet<Edge> boundaryEdges,
                            Dictionary<Edge, int> edgeToNewVertex, 
                            List<Vector3> newVertices)
     {
@@ -169,29 +188,76 @@ public class Loop : MonoBehaviour
             
             Vector3 edgePoint;
             
-            if (adjacentTriangles.Count == 2)
+            if (boundaryEdges.Contains(edge))
             {
-                // Arête interne - utiliser la formule de Loop
-                Vector3 v1 = oldVertices[edge.v1];
-                Vector3 v2 = oldVertices[edge.v2];
-                
-                // Trouver les deux autres vertices des triangles adjacents
-                Vector3 vLeft = FindThirdVertex(oldTriangles, adjacentTriangles[0], edge.v1, edge.v2, oldVertices);
-                Vector3 vRight = FindThirdVertex(oldTriangles, adjacentTriangles[1], edge.v1, edge.v2, oldVertices);
-                
-                // Formule de Loop: e = 3/8 * (v1 + v2) + 1/8 * (vLeft + vRight)
-                edgePoint = 0.375f * (v1 + v2) + 0.125f * (vLeft + vRight);
+                // Arête de bordure - utiliser la règle de bordure
+                edgePoint = CalculateBoundaryEdgePoint(edge, oldVertices);
+            }
+            else if (adjacentTriangles.Count == 2)
+            {
+                // Arête manifold standard - utiliser la formule de Loop
+                edgePoint = CalculateInteriorEdgePoint(edge, adjacentTriangles, oldTriangles, oldVertices);
             }
             else
             {
-                // Arête de bordure - simple moyenne
-                edgePoint = 0.5f * (oldVertices[edge.v1] + oldVertices[edge.v2]);
+                // Arête non-manifold (plus de 2 triangles) - utiliser une approche robuste
+                Debug.LogWarning($"Non-manifold edge detected: {edge.v1} - {edge.v2} with {adjacentTriangles.Count} triangles");
+                edgePoint = CalculateNonManifoldEdgePoint(edge, adjacentTriangles, oldTriangles, oldVertices);
             }
             
             int newVertexIndex = newVertices.Count;
             newVertices.Add(edgePoint);
             edgeToNewVertex[edge] = newVertexIndex;
         }
+    }
+    
+    Vector3 CalculateBoundaryEdgePoint(Edge edge, Vector3[] vertices)
+    {
+        // Pour les arêtes de bordure, utiliser la moyenne simple pour préserver la forme
+        Vector3 v1 = vertices[edge.v1];
+        Vector3 v2 = vertices[edge.v2];
+        return 0.5f * (v1 + v2);
+    }
+    
+    Vector3 CalculateInteriorEdgePoint(Edge edge, List<int> adjacentTriangles, int[] oldTriangles, Vector3[] oldVertices)
+    {
+        Vector3 v1 = oldVertices[edge.v1];
+        Vector3 v2 = oldVertices[edge.v2];
+        
+        // Trouver les deux autres vertices des triangles adjacents
+        Vector3 vLeft = FindThirdVertex(oldTriangles, adjacentTriangles[0], edge.v1, edge.v2, oldVertices);
+        Vector3 vRight = FindThirdVertex(oldTriangles, adjacentTriangles[1], edge.v1, edge.v2, oldVertices);
+        
+        // Formule de Loop: e = 3/8 * (v1 + v2) + 1/8 * (vLeft + vRight)
+        return 0.375f * (v1 + v2) + 0.125f * (vLeft + vRight);
+    }
+    
+    Vector3 CalculateNonManifoldEdgePoint(Edge edge, List<int> adjacentTriangles, int[] triangles, Vector3[] vertices)
+    {
+        Vector3 v1 = vertices[edge.v1];
+        Vector3 v2 = vertices[edge.v2];
+        
+        if (adjacentTriangles.Count > 2)
+        {
+            Vector3 edgeCenter = 0.5f * (v1 + v2);
+            Vector3 oppositeSum = Vector3.zero;
+            
+            // Collecter tous les vertices opposés
+            foreach (int triangleIndex in adjacentTriangles)
+            {
+                Vector3 oppositeVertex = FindThirdVertex(triangles, triangleIndex, edge.v1, edge.v2, vertices);
+                oppositeSum += oppositeVertex;
+            }
+            
+            // Formule modifiée pour les arêtes non-manifold
+            float edgeWeight = 0.6f;
+            float oppositeWeight = 0.4f / adjacentTriangles.Count;
+            
+            return edgeWeight * edgeCenter + oppositeWeight * oppositeSum;
+        }
+        
+        // Fallback: simple moyenne
+        return 0.5f * (v1 + v2);
     }
     
     Vector3 FindThirdVertex(int[] triangles, int triangleIndex, int v1, int v2, Vector3[] vertices)
@@ -206,26 +272,87 @@ public class Loop : MonoBehaviour
         return vertices[tv2];
     }
     
-    void CalculateVertexPoints(Vector3[] oldVertices, Dictionary<int, List<int>> vertexNeighbors, 
-                              List<Vector3> newVertices)
+    void CalculateVertexPoints(Vector3[] oldVertices, Dictionary<int, List<int>> vertexNeighbors,
+                             HashSet<int> boundaryVertices, HashSet<Edge> boundaryEdges,
+                             List<Vector3> newVertices)
     {
         for (int i = 0; i < oldVertices.Length; i++)
         {
-            List<int> neighbors = vertexNeighbors[i];
-            int n = neighbors.Count;
-            
-            float alpha = CalculateLoopAlpha(n);
-            
-            Vector3 neighborSum = Vector3.zero;
-            foreach (int neighbor in neighbors)
+            if (!vertexNeighbors.ContainsKey(i))
             {
-                neighborSum += oldVertices[neighbor];
+                // Vertex isolé - le garder tel quel
+                Debug.LogWarning($"Isolated vertex found: {i}");
+                continue;
             }
             
-            // Formule de Loop: v' = (1-n*α)*v + α*∑neighbors
-            Vector3 newVertexPoint = (1f - n * alpha) * oldVertices[i] + alpha * neighborSum;
+            List<int> neighbors = vertexNeighbors[i];
+            if (neighbors.Count == 0)
+            {
+                continue;
+            }
+            
+            Vector3 newVertexPoint;
+            
+            if (boundaryVertices.Contains(i))
+            {
+                // Vertex de bordure - utiliser la règle de bordure
+                newVertexPoint = CalculateBoundaryVertexPoint(i, oldVertices, neighbors, boundaryEdges);
+            }
+            else
+            {
+                // Vertex intérieur - utiliser la règle de Loop standard
+                newVertexPoint = CalculateInteriorVertexPoint(i, oldVertices, neighbors);
+            }
+            
             newVertices[i] = newVertexPoint;
         }
+    }
+    
+    Vector3 CalculateBoundaryVertexPoint(int vertexIndex, Vector3[] oldVertices, List<int> neighbors, HashSet<Edge> boundaryEdges)
+    {
+        // Pour un vertex de bordure, ne considérer que les voisins qui sont aussi sur la bordure
+        List<int> boundaryNeighbors = new List<int>();
+        
+        foreach (int neighbor in neighbors)
+        {
+            Edge edge = new Edge(vertexIndex, neighbor);
+            if (boundaryEdges.Contains(edge))
+            {
+                boundaryNeighbors.Add(neighbor);
+            }
+        }
+        
+        if (boundaryNeighbors.Count == 2)
+        {
+            // Cas normal: vertex de bordure avec exactement 2 voisins de bordure
+            // Règle de subdivision de bordure: 1/8 * (n1 + n2) + 3/4 * v
+            Vector3 v = oldVertices[vertexIndex];
+            Vector3 n1 = oldVertices[boundaryNeighbors[0]];
+            Vector3 n2 = oldVertices[boundaryNeighbors[1]];
+            
+            return 0.75f * v + 0.125f * (n1 + n2);
+        }
+        else
+        {
+            // Cas particulier (coin, etc.) - garder le vertex original
+            Debug.Log($"Boundary vertex {vertexIndex} has {boundaryNeighbors.Count} boundary neighbors");
+            return oldVertices[vertexIndex];
+        }
+    }
+    
+    Vector3 CalculateInteriorVertexPoint(int vertexIndex, Vector3[] oldVertices, List<int> neighbors)
+    {
+        int n = neighbors.Count;
+        float alpha = CalculateLoopAlpha(n);
+        
+        Vector3 neighborSum = Vector3.zero;
+        foreach (int neighbor in neighbors)
+        {
+            neighborSum += oldVertices[neighbor];
+        }
+        
+        // Formule de Loop: v' = (1-n*α)*v + α*∑neighbors
+        return (1f - n * alpha) * oldVertices[vertexIndex] + alpha * neighborSum;
     }
     
     float CalculateLoopAlpha(int n)
@@ -234,13 +361,52 @@ public class Loop : MonoBehaviour
         {
             return 3f / 16f;
         }
-        else
+        else if (n > 3)
         {
             float cosValue = Mathf.Cos(2f * Mathf.PI / n);
             return (1f / n) * (5f / 8f - Mathf.Pow(3f / 8f + 1f / 4f * cosValue, 2f));
         }
+        else
+        {
+            // Pour n < 3, utiliser une valeur conservative
+            return 1f / 8f;
+        }
     }
     
+    Mesh Weld(Mesh m)
+    {
+        var oldV = m.vertices;
+        var oldT = m.triangles;
+        var map = new Dictionary<Vector3, int>();
+        var newV = new List<Vector3>();
+        var remap = new int[oldV.Length];
+
+        // 1) Créer la table de hachage
+        for (int i = 0; i < oldV.Length; i++)
+        {
+            if (!map.TryGetValue(oldV[i], out int idx))
+            {
+                idx = newV.Count;
+                newV.Add(oldV[i]);
+                map[oldV[i]] = idx;
+            }
+            remap[i] = idx;
+        }
+
+        // 2) Réindexer les triangles
+        var newT = new int[oldT.Length];
+        for (int i = 0; i < oldT.Length; i++)
+            newT[i] = remap[oldT[i]];
+
+        // 3) Construire et retourner le mesh
+        var nm = new Mesh();
+        nm.vertices = newV.ToArray();
+        nm.triangles = newT;
+        nm.RecalculateNormals();
+        nm.RecalculateBounds();
+        return nm;
+    }
+
     void BuildNewTriangles(int[] oldTriangles, Dictionary<Edge, int> edgeToNewVertex, 
                           List<int> newTriangles)
     {
@@ -250,19 +416,32 @@ public class Loop : MonoBehaviour
             int v1 = oldTriangles[i + 1];
             int v2 = oldTriangles[i + 2];
             
+            // Vérifier que toutes les arêtes existent
+            Edge e01 = new Edge(v0, v1);
+            Edge e12 = new Edge(v1, v2);
+            Edge e20 = new Edge(v2, v0);
+            
+            if (!edgeToNewVertex.ContainsKey(e01) || 
+                !edgeToNewVertex.ContainsKey(e12) || 
+                !edgeToNewVertex.ContainsKey(e20))
+            {
+                Debug.LogError($"Missing edge vertex for triangle {i/3}");
+                continue;
+            }
+            
             // Obtenir les nouveaux points d'arête
-            int e01 = edgeToNewVertex[new Edge(v0, v1)];
-            int e12 = edgeToNewVertex[new Edge(v1, v2)];
-            int e20 = edgeToNewVertex[new Edge(v2, v0)];
+            int ne01 = edgeToNewVertex[e01];
+            int ne12 = edgeToNewVertex[e12];
+            int ne20 = edgeToNewVertex[e20];
             
             // Créer 4 nouveaux triangles selon le schéma 1-to-4 de Loop
             // Triangle central
-            newTriangles.AddRange(new int[] { e01, e12, e20 });
+            newTriangles.AddRange(new int[] { ne01, ne12, ne20 });
             
             // Triangles des coins
-            newTriangles.AddRange(new int[] { v0, e01, e20 });
-            newTriangles.AddRange(new int[] { v1, e12, e01 });
-            newTriangles.AddRange(new int[] { v2, e20, e12 });
+            newTriangles.AddRange(new int[] { v0, ne01, ne20 });
+            newTriangles.AddRange(new int[] { v1, ne12, ne01 });
+            newTriangles.AddRange(new int[] { v2, ne20, ne12 });
         }
     }
     
