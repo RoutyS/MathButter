@@ -44,8 +44,8 @@ public class KobbeltSubdivision : MonoBehaviour
             return;
         }
 
-        // On clone le mesh original (par exemple celui du cube)
-        originalMesh = Instantiate(meshFilter.mesh);
+        // Souder et sauvegarder le mesh original pour éviter les problèmes de vertices dupliqués
+        originalMesh = Weld(Instantiate(meshFilter.mesh));
         ApplyKobbeltSubdivision();
     }
 
@@ -287,6 +287,41 @@ public class KobbeltSubdivision : MonoBehaviour
             };
         }
         dict[edge].centers.Add(center);
+    }
+
+    // Fonction de soudage pour fusionner les vertices identiques
+    Mesh Weld(Mesh m)
+    {
+        var oldV = m.vertices;
+        var oldT = m.triangles;
+        var map = new Dictionary<Vector3, int>();
+        var newV = new List<Vector3>();
+        var remap = new int[oldV.Length];
+
+        // 1) Créer la table de hachage
+        for (int i = 0; i < oldV.Length; i++)
+        {
+            if (!map.TryGetValue(oldV[i], out int idx))
+            {
+                idx = newV.Count;
+                newV.Add(oldV[i]);
+                map[oldV[i]] = idx;
+            }
+            remap[i] = idx;
+        }
+
+        // 2) Réindexer les triangles
+        var newT = new int[oldT.Length];
+        for (int i = 0; i < oldT.Length; i++)
+            newT[i] = remap[oldT[i]];
+
+        // 3) Construire et retourner le mesh
+        var nm = new Mesh();
+        nm.vertices = newV.ToArray();
+        nm.triangles = newT;
+        nm.RecalculateNormals();
+        nm.RecalculateBounds();
+        return nm;
     }
 
     [ContextMenu("Reset to Original")]

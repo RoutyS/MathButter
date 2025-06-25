@@ -2,14 +2,52 @@ using UnityEngine;
 
 public class KobbeltSubdivisionDemo : MonoBehaviour
 {
-    [Header("Settings")]
+    [Header("√3 Subdivision Settings")]
     public Material kobbeltMaterial;
     public bool showWireframe = true;
     public int subdivisionLevels = 1;
+    public Mesh inputMesh; // Nouveau: permet d'assigner n'importe quel mesh
     
     void Start()
     {
-        CreateKobbeltCube();
+        if (inputMesh != null)
+        {
+            CreateKobbeltObject(inputMesh, "√3-Kobbelt Subdivision Object");
+        }
+        else
+        {
+            Debug.LogWarning("Aucun mesh assigné, création d'un cube par défaut");
+            CreateKobbeltCube();
+        }
+    }
+    
+    void CreateKobbeltObject(Mesh mesh, string name)
+    {
+        GameObject obj = new GameObject(name);
+        obj.transform.position = Vector3.zero;
+        
+        MeshFilter meshFilter = obj.AddComponent<MeshFilter>();
+        MeshRenderer meshRenderer = obj.AddComponent<MeshRenderer>();
+        
+        meshFilter.mesh = mesh;
+        
+        if (kobbeltMaterial != null)
+        {
+            meshRenderer.material = kobbeltMaterial;
+        }
+        else
+        {
+            Material defaultMat = new Material(Shader.Find("Standard"));
+            defaultMat.color = Color.magenta;
+            meshRenderer.material = defaultMat;
+        }
+        
+        // Ajouter le script de subdivision Kobbelt
+        KobbeltSubdivision kobbeltScript = obj.AddComponent<KobbeltSubdivision>();
+        kobbeltScript.subdivisionLevels = subdivisionLevels;
+        
+    
+        
         SetupCamera();
     }
     
@@ -42,6 +80,8 @@ public class KobbeltSubdivisionDemo : MonoBehaviour
         {
             AddWireframe(cubeObject, Color.red);
         }
+        
+        SetupCamera();
     }
     
     Mesh CreateTriangulatedCubeMesh()
