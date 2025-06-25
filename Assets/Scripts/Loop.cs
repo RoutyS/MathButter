@@ -74,7 +74,139 @@ public class Loop : MonoBehaviour
             currentMesh = PerformLoopSubdivision(currentMesh);
         }
         
+        // Corriger les orientations des triangles
+        FixTriangleOrientations(currentMesh);
+        
         meshFilter.mesh = currentMesh;
+    }
+    
+    void FixTriangleOrientations(Mesh mesh)
+    {
+        Vector3[] vertices = mesh.vertices;
+        int[] triangles = mesh.triangles;
+        int triangleCount = triangles.Length / 3;
+        
+        if (triangleCount == 0) return;
+        
+        // 1. Construire la liste des triangles adjacents
+        Dictionary<Edge, List<int>> edgeToTriangles = new Dictionary<Edge, List<int>>();
+        
+        for (int i = 0; i < triangleCount; i++)
+        {
+            int i0 = triangles[i * 3];
+            int i1 = triangles[i * 3 + 1];
+            int i2 = triangles[i * 3 + 2];
+            
+            AddEdgeTriangle(edgeToTriangles, new Edge(i0, i1), i);
+            AddEdgeTriangle(edgeToTriangles, new Edge(i1, i2), i);
+            AddEdgeTriangle(edgeToTriangles, new Edge(i2, i0), i);
+        }
+        
+        // 2. Propagation d'orientation
+        bool[] processed = new bool[triangleCount];
+        bool[] shouldFlip = new bool[triangleCount];
+        
+        // Commencer avec le premier triangle (supposé bien orienté)
+        Queue<int> toProcess = new Queue<int>();
+        toProcess.Enqueue(0);
+        processed[0] = true;
+        
+        while (toProcess.Count > 0)
+        {
+            int currentTriangle = toProcess.Dequeue();
+            
+            // Examiner tous les triangles voisins
+            for (int edge = 0; edge < 3; edge++)
+            {
+                int v1 = triangles[currentTriangle * 3 + edge];
+                int v2 = triangles[currentTriangle * 3 + (edge + 1) % 3];
+                
+                Edge sharedEdge = new Edge(v1, v2);
+                
+                if (edgeToTriangles.ContainsKey(sharedEdge))
+                {
+                    foreach (int neighborTriangle in edgeToTriangles[sharedEdge])
+                    {
+                        if (neighborTriangle == currentTriangle || processed[neighborTriangle])
+                            continue;
+                        
+                        // Vérifier si l'orientation est cohérente
+                        if (!AreTrianglesConsistentlyOriented(triangles, currentTriangle, neighborTriangle, shouldFlip[currentTriangle]))
+                        {
+                            shouldFlip[neighborTriangle] = true;
+                        }
+                        
+                        processed[neighborTriangle] = true;
+                        toProcess.Enqueue(neighborTriangle);
+                    }
+                }
+            }
+        }
+        
+        // 3. Appliquer les corrections
+        for (int i = 0; i < triangleCount; i++)
+        {
+            if (shouldFlip[i])
+            {
+                int baseIndex = i * 3;
+                int temp = triangles[baseIndex + 1];
+                triangles[baseIndex + 1] = triangles[baseIndex + 2];
+                triangles[baseIndex + 2] = temp;
+            }
+        }
+        
+        mesh.triangles = triangles;
+        mesh.RecalculateNormals();
+    }
+
+    bool AreTrianglesConsistentlyOriented(int[] triangles, int tri1, int tri2, bool tri1IsFlipped)
+    {
+        // Trouver l'arête partagée
+        int[] t1 = { triangles[tri1 * 3], triangles[tri1 * 3 + 1], triangles[tri1 * 3 + 2] };
+        int[] t2 = { triangles[tri2 * 3], triangles[tri2 * 3 + 1], triangles[tri2 * 3 + 2] };
+        
+        // Trouver les deux vertices partagés
+        List<int> shared = new List<int>();
+        List<int> t1Indices = new List<int>();
+        List<int> t2Indices = new List<int>();
+        
+        for (int i = 0; i < 3; i++)
+        {
+            for (int j = 0; j < 3; j++)
+            {
+                if (t1[i] == t2[j])
+                {
+                    shared.Add(t1[i]);
+                    t1Indices.Add(i);
+                    t2Indices.Add(j);
+                }
+            }
+        }
+        
+        if (shared.Count != 2) return true; // Pas d'arête partagée
+        
+        // Vérifier l'ordre des vertices partagés
+        int t1EdgeStart = t1Indices[0];
+        int t1EdgeEnd = t1Indices[1];
+        int t2EdgeStart = t2Indices[0];
+        int t2EdgeEnd = t2Indices[1];
+        
+        // Dans un mesh bien orienté, l'arête partagée doit être dans des directions opposées
+        bool t1Forward = (t1EdgeEnd == (t1EdgeStart + 1) % 3);
+        bool t2Forward = (t2EdgeEnd == (t2EdgeStart + 1) % 3);
+        
+        // Si tri1 est flippé, inverser sa direction
+        if (tri1IsFlipped) t1Forward = !t1Forward;
+        
+        // Les triangles sont cohérents si leurs arêtes partagées vont dans des directions opposées
+        return t1Forward != t2Forward;
+    }
+
+    void AddEdgeTriangle(Dictionary<Edge, List<int>> dict, Edge e, int tri)
+    {
+        if (!dict.ContainsKey(e))
+            dict[e] = new List<int>();
+        dict[e].Add(tri);
     }
     
     Mesh PerformLoopSubdivision(Mesh inputMesh)

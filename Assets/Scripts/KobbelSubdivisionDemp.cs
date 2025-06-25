@@ -37,9 +37,10 @@ public class KobbeltSubdivisionDemo : MonoBehaviour
         }
         else
         {
-            Material defaultMat = new Material(Shader.Find("Standard"));
-            defaultMat.color = Color.magenta;
-            meshRenderer.material = defaultMat;
+            Material doubleSidedMat = new Material(Shader.Find("Standard"));
+            doubleSidedMat.SetInt("_Cull", (int)UnityEngine.Rendering.CullMode.Off);
+            doubleSidedMat.color = Color.magenta;
+            meshRenderer.material = doubleSidedMat;
         }
         
         // Ajouter le script de subdivision Kobbelt
@@ -67,23 +68,22 @@ public class KobbeltSubdivisionDemo : MonoBehaviour
         }
         else
         {
-            Material defaultMat = new Material(Shader.Find("Standard"));
-            defaultMat.color = Color.magenta;
-            meshRenderer.material = defaultMat;
+            Material doubleSidedMat = new Material(Shader.Find("Standard"));
+            doubleSidedMat.SetInt("_Cull", (int)UnityEngine.Rendering.CullMode.Off);
+            doubleSidedMat.color = Color.magenta;
+            meshRenderer.material = doubleSidedMat;
         }
         
         // Ajouter le script de subdivision Kobbelt
         KobbeltSubdivision kobbeltScript = cubeObject.AddComponent<KobbeltSubdivision>();
         kobbeltScript.subdivisionLevels = subdivisionLevels;
         
-        if (showWireframe)
-        {
-            AddWireframe(cubeObject, Color.red);
-        }
+        
         
         SetupCamera();
     }
-    
+    // Après avoir créé vos nouveaux triangles
+  
     Mesh CreateTriangulatedCubeMesh()
     {
         Mesh mesh = new Mesh();
@@ -102,12 +102,23 @@ public class KobbeltSubdivisionDemo : MonoBehaviour
         
         int[] triangles = new int[]
         {
-            0, 2, 1,  0, 3, 2,
-            1, 2, 6,  1, 6, 5,
-            5, 6, 7,  5, 7, 4,
-            4, 7, 3,  4, 3, 0,
-            3, 7, 6,  3, 6, 2,
-            4, 0, 1,  4, 1, 5
+            // Face avant (regarde vers +Z)
+            0, 1, 2,  0, 2, 3,  // Au lieu de 0, 2, 1,  0, 3, 2
+    
+            // Face droite (regarde vers +X)  
+            1, 5, 6,  1, 6, 2,  // Au lieu de 1, 2, 6,  1, 6, 5
+    
+            // Face arrière (regarde vers -Z)
+            5, 4, 7,  5, 7, 6,  // Au lieu de 5, 6, 7,  5, 7, 4
+    
+            // Face gauche (regarde vers -X)
+            4, 0, 3,  4, 3, 7,  // Au lieu de 4, 7, 3,  4, 3, 0
+    
+            // Face haut (regarde vers +Y)
+            3, 2, 6,  3, 6, 7,  // Au lieu de 3, 7, 6,  3, 6, 2
+    
+            // Face bas (regarde vers -Y)
+            4, 5, 1,  4, 1, 0   // Au lieu de 4, 0, 1,  4, 1, 5
         };
         
         mesh.vertices = vertices;
