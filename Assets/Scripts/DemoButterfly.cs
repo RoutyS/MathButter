@@ -1,5 +1,6 @@
 ﻿using System.Collections.Generic;
 using UnityEngine;
+using static DemoButterfly;
 
 public class DemoButterfly : MonoBehaviour
 {
@@ -16,11 +17,25 @@ public class DemoButterfly : MonoBehaviour
     public bool showDebugLogs = false;
 
     private ButterflySubdivision butterflyComponent;
+
     private Mesh originalMesh;
+
+    public enum MeshType { Cube, Terrain }
+    [Header("Type de mesh")]
+
+    public MeshType meshType = MeshType.Cube;
+
+    MeshType previousMeshType;
+
+    void Awake()
+    {
+        previousMeshType = meshType;
+    }
 
     void Start()
     {
-        SetupCube();
+        SetupMesh();
+
 
         if (autoSubdivideOnStart)
             ApplySubdivision();
@@ -57,6 +72,77 @@ public class DemoButterfly : MonoBehaviour
 
         transform.position = Vector3.zero;
     }
+
+    void SetupMesh()
+    {
+        gameObject.name = "ButterflyMesh";
+
+        MeshFilter mf = GetComponent<MeshFilter>() ?? gameObject.AddComponent<MeshFilter>();
+        MeshRenderer mr = GetComponent<MeshRenderer>() ?? gameObject.AddComponent<MeshRenderer>();
+
+        if (meshType == MeshType.Cube)
+            originalMesh = CreateTriangulatedCubeMesh();
+        else
+            originalMesh = CreateBumpyPlane(width: 10, height: 10, resolution: 20, heightScale: 1.5f);
+
+        mf.mesh = originalMesh;
+
+        butterflyComponent = GetComponent<ButterflySubdivision>() ?? gameObject.AddComponent<ButterflySubdivision>();
+        butterflyComponent.inputMeshFilter = mf;
+        butterflyComponent.subdivisionLevels = subdivisionLevels;
+        butterflyComponent.showDebugPoints = showDebugPoints;
+        butterflyComponent.showDebugLogs = showDebugLogs;
+        //butterflyComponent.projectToSphere = (meshType == MeshType.Cube);
+
+
+        ApplyMaterial(mr);
+        transform.position = Vector3.zero;
+    }
+
+    Mesh CreateBumpyPlane(int width, int height, int resolution, float heightScale)
+    {
+        Mesh mesh = new Mesh { name = "BumpyPlane" };
+
+        List<Vector3> vertices = new();
+        List<int> triangles = new();
+
+        for (int y = 0; y <= resolution; y++)
+        {
+            for (int x = 0; x <= resolution; x++)
+            {
+                float xf = (float)x / resolution * width - width / 2f;
+                float yf = (float)y / resolution * height - height / 2f;
+
+                // Générer du relief (bosses avec Perlin Noise)
+                float z = Mathf.PerlinNoise(xf * 0.2f, yf * 0.2f) * heightScale;
+
+                vertices.Add(new Vector3(xf, z, yf));
+            }
+        }
+
+        for (int y = 0; y < resolution; y++)
+        {
+            for (int x = 0; x < resolution; x++)
+            {
+                int i = y * (resolution + 1) + x;
+                int iRight = i + 1;
+                int iDown = i + resolution + 1;
+                int iDownRight = iDown + 1;
+
+                // Deux triangles par carré
+                triangles.AddRange(new[] { i, iDown, iRight });
+                triangles.AddRange(new[] { iRight, iDown, iDownRight });
+            }
+        }
+
+        mesh.vertices = vertices.ToArray();
+        mesh.triangles = triangles.ToArray();
+        mesh.RecalculateNormals();
+        mesh.RecalculateBounds();
+        return mesh;
+    }
+
+
 
     void ApplyMaterial(MeshRenderer mr)
     {
@@ -102,9 +188,23 @@ public class DemoButterfly : MonoBehaviour
             subdivided = butterflyComponent.SubdivideButterfly(subdivided);
 
         // projection sphérique UNE FOIS
-        List<Vector3> verts = new(subdivided.vertices);
-        ReprojectToSphere(ref verts, radiusOverride: 1.732f);
-        subdivided.vertices = verts.ToArray();
+        /*if (meshType == MeshType.Cube)
+        {
+            List<Vector3> verts = new(subdivided.vertices);
+
+            if (meshType == MeshType.Terrain)
+            {
+            }
+            else
+            {
+                ReprojectToSphere(ref verts, radiusOverride: 1.732f);
+            }
+
+            subdivided.vertices = verts.ToArray();
+        }*/
+
+
+
         subdivided.RecalculateNormals();
 
         // Appliquer le résultat
@@ -122,7 +222,7 @@ public class DemoButterfly : MonoBehaviour
         Debug.Log("🔄 Mesh reset to original");
     }
 
-    void ReprojectToSphere(ref List<Vector3> vertices, float? radiusOverride = null)
+    /*void ReprojectToSphere(ref List<Vector3> vertices, float? radiusOverride = null)
     {
         // centre
         Vector3 center = Vector3.zero;
@@ -139,7 +239,7 @@ public class DemoButterfly : MonoBehaviour
 
         for (int i = 0; i < vertices.Count; i++)
             vertices[i] = center + (vertices[i] - center).normalized * radius;
-    }
+    }*/
 
 
     void CleanupDebugPoints()
@@ -161,6 +261,13 @@ public class DemoButterfly : MonoBehaviour
             butterflyComponent.subdivisionLevels = subdivisionLevels;
             butterflyComponent.showDebugPoints = showDebugPoints;
             butterflyComponent.showDebugLogs = showDebugLogs;
+
+            if (previousMeshType != meshType)
+            {
+                SetupMesh();
+                previousMeshType = meshType;
+            }
+
         }
     }
 
@@ -244,4 +351,6 @@ public class DemoButterfly : MonoBehaviour
 #endif
         }
     }
+
+
 }
