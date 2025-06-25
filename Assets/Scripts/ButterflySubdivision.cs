@@ -120,11 +120,15 @@ public class ButterflySubdivision : MonoBehaviour
         edgeToNew[e] = newIndex;
 
         // ── points & lignes debug (optionnel) ─────────────────────
-        GameObject s = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-        s.transform.position = mid;
-        s.transform.localScale = Vector3.one * 0.04f;
-        s.GetComponent<Renderer>().material.color = Color.red;
-        s.tag = "ButterflyPoint";
+        
+
+        GameObject sphere = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+        sphere.transform.position = mid;
+        sphere.transform.localScale = Vector3.one * 0.03f;
+        sphere.GetComponent<Renderer>().material.color = Color.red;
+        sphere.name = "ButterflyPoint";
+        sphere.transform.SetParent(inputMeshFilter.transform, false); // <-- AJOUTÉ
+
 
         debugLines.Add((transform.TransformPoint(v1), transform.TransformPoint(mid)));
         debugLines.Add((transform.TransformPoint(v2), transform.TransformPoint(mid)));

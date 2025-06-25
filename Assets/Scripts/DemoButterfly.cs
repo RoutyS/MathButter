@@ -1,62 +1,74 @@
 ﻿using UnityEngine;
 
-[RequireComponent(typeof(MeshFilter), typeof(MeshRenderer))]
 public class DemoButterfly : MonoBehaviour
 {
-    [Header("Butterfly Settings")]
+    [Header("Réglages")]
+    public Material material;
     public int levels = 1;
-    public Material cubeMaterial;
 
     void Start()
     {
-        // Crée un cube de base si aucun mesh
-        MeshFilter mf = GetComponent<MeshFilter>();
-        if (mf.sharedMesh == null)
-            mf.sharedMesh = CreateCube();
+        GameObject cube = this.gameObject;
+        cube.name = "ButterflyCube";
 
-        // Applique Butterfly n fois
-        ButterflySubdivision bs = GetComponent<ButterflySubdivision>();
-        if (bs == null)
-            bs = gameObject.AddComponent<ButterflySubdivision>();
+        MeshFilter mf = cube.GetComponent<MeshFilter>();
+        if (mf == null)
+            mf = cube.AddComponent<MeshFilter>();
 
-        Mesh m = mf.sharedMesh;
+        MeshRenderer mr = cube.GetComponent<MeshRenderer>();
+        if (mr == null)
+            mr = cube.AddComponent<MeshRenderer>();
+
+        // Création du cube triangulé
+        Mesh mesh = CreateTriangulatedCubeMesh();
+
+        // Subdivision Butterfly
+        var butterfly = cube.GetComponent<ButterflySubdivision>();
+        if (butterfly == null)
+            butterfly = cube.AddComponent<ButterflySubdivision>();
+
+        butterfly.inputMeshFilter = mf;
+
         for (int i = 0; i < levels; i++)
-            m = bs.SubdivideButterfly(m);
+            mesh = butterfly.SubdivideButterfly(mesh);
 
-        mf.sharedMesh = m;
-        Debug.Log($"Butterfly (level {levels}) → vertices = {m.vertexCount}, triangles = {m.triangles.Length / 3}");
+        mf.mesh = mesh;
 
         // Matériau
-        MeshRenderer mr = GetComponent<MeshRenderer>();
-        if (mr.sharedMaterial == null)
+        if (material != null)
+            mr.material = material;
+        else
         {
-            Material mat = new Material(Shader.Find("Unlit/Color"));
+            Material mat = new Material(Shader.Find("Standard"));
             mat.color = Color.cyan;
-            mr.sharedMaterial = cubeMaterial != null ? cubeMaterial : mat;
+            mr.material = mat;
         }
+
+        cube.transform.position = Vector3.zero;
     }
 
-    Mesh CreateCube()
+
+
+    Mesh CreateTriangulatedCubeMesh()
     {
-        Mesh mesh = new Mesh { name = "ButterflyCube" };
+        Mesh mesh = new Mesh { name = "TriangulatedCube" };
 
         Vector3[] v = {
+            // avant
             new Vector3(-1,-1, 1), new Vector3(1,-1, 1),
-            new Vector3(1, 1, 1), new Vector3(-1, 1, 1),
+            new Vector3( 1, 1, 1), new Vector3(-1, 1, 1),
+            // arrière
             new Vector3(-1,-1,-1), new Vector3(1,-1,-1),
-            new Vector3(1, 1,-1), new Vector3(-1, 1,-1)
+            new Vector3( 1, 1,-1), new Vector3(-1, 1,-1)
         };
 
-        // Petite bosse pour éviter les coplanaires
-        v[2] += new Vector3(0, 0.2f, 0);
-
         int[] t = {
-            0,2,1, 0,3,2,
-            1,2,6, 1,6,5,
-            5,6,7, 5,7,4,
-            4,7,3, 4,3,0,
-            3,7,6, 3,6,2,
-            4,0,1, 4,1,5
+            0,2,1, 0,3,2, // avant
+            1,2,6, 1,6,5, // droite
+            5,6,7, 5,7,4, // arrière
+            4,7,3, 4,3,0, // gauche
+            3,7,6, 3,6,2, // haut
+            4,0,1, 4,1,5  // bas
         };
 
         mesh.vertices = v;
