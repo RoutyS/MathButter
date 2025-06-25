@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 
+[RequireComponent(typeof(MeshFilter))]
 public class KobbeltSubdivision : MonoBehaviour
 {
     [Header("√3 Subdivision Settings")]
@@ -43,6 +44,7 @@ public class KobbeltSubdivision : MonoBehaviour
             return;
         }
 
+        // On clone le mesh original (par exemple celui du cube)
         originalMesh = Instantiate(meshFilter.mesh);
         ApplyKobbeltSubdivision();
     }
@@ -121,11 +123,9 @@ public class KobbeltSubdivision : MonoBehaviour
             boundaryEdges = new List<Edge>()
         };
 
-        // Initialiser les listes de voisins
         for (int i = 0; i < vertices.Length; i++)
             topology.vertexNeighbors[i] = new List<int>();
 
-        // Analyser chaque triangle
         for (int i = 0; i < triangles.Length; i += 3)
         {
             int v0 = triangles[i];
@@ -133,18 +133,15 @@ public class KobbeltSubdivision : MonoBehaviour
             int v2 = triangles[i + 2];
             int triIndex = i / 3;
 
-            // Ajouter les voisins
             AddNeighbor(topology.vertexNeighbors, v0, v1);
             AddNeighbor(topology.vertexNeighbors, v1, v2);
             AddNeighbor(topology.vertexNeighbors, v2, v0);
 
-            // Associer les arêtes aux triangles
             AddEdgeTriangle(topology.edgeToTriangles, new Edge(v0, v1), triIndex);
             AddEdgeTriangle(topology.edgeToTriangles, new Edge(v1, v2), triIndex);
             AddEdgeTriangle(topology.edgeToTriangles, new Edge(v2, v0), triIndex);
         }
 
-        // Identifier les arêtes de frontière
         foreach (var kvp in topology.edgeToTriangles)
             if (kvp.Value.Count == 1)
                 topology.boundaryEdges.Add(kvp.Key);
@@ -171,7 +168,6 @@ public class KobbeltSubdivision : MonoBehaviour
         public List<int> triangles;
     }
 
-    // Étape 1: Créer la subdivision initiale (1->3 triangles)
     SubdivisionResult CreateSubdividedMesh(Vector3[] oldVertices, int[] oldTriangles)
     {
         var result = new SubdivisionResult
@@ -180,20 +176,16 @@ public class KobbeltSubdivision : MonoBehaviour
             triangles = new List<int>()
         };
 
-        // Pour chaque triangle, créer le centre et 3 nouveaux triangles
         for (int i = 0; i < oldTriangles.Length; i += 3)
         {
             int v0 = oldTriangles[i];
             int v1 = oldTriangles[i + 1];
             int v2 = oldTriangles[i + 2];
 
-            // Calculer le centre du triangle
             Vector3 center = (oldVertices[v0] + oldVertices[v1] + oldVertices[v2]) / 3f;
             int centerIndex = result.vertices.Count;
             result.vertices.Add(center);
 
-            // Créer 3 triangles en préservant l'orientation du triangle original
-            // Chaque triangle va du centre vers une arête, dans le sens du triangle original
             result.triangles.AddRange(new int[] { v0, v1, centerIndex });
             result.triangles.AddRange(new int[] { v1, v2, centerIndex });
             result.triangles.AddRange(new int[] { v2, v0, centerIndex });
@@ -202,16 +194,13 @@ public class KobbeltSubdivision : MonoBehaviour
         return result;
     }
 
-    // Étape 2: Perturber les vertices originaux
     Vector3[] PerturbVertices(Vector3[] allVertices, Dictionary<int, List<int>> neighbors, int originalVertexCount)
     {
         Vector3[] result = new Vector3[allVertices.Length];
 
-        // Copier tous les vertices
         for (int i = 0; i < allVertices.Length; i++)
             result[i] = allVertices[i];
 
-        // Perturber seulement les vertices originaux
         for (int i = 0; i < originalVertexCount; i++)
         {
             if (!neighbors.ContainsKey(i)) continue;
@@ -221,23 +210,19 @@ public class KobbeltSubdivision : MonoBehaviour
 
             if (n == 0) continue;
 
-            // Calculer alpha selon la formule de Kobbelt
             float alpha = (4f - 2f * Mathf.Cos(2f * Mathf.PI / n)) / (9f * n);
             alpha = Mathf.Max(0f, alpha);
 
-            // Calculer la somme des voisins
             Vector3 neighborSum = Vector3.zero;
             foreach (int j in neighborList)
                 neighborSum += allVertices[j];
 
-            // Appliquer la perturbation
             result[i] = (1f - n * alpha) * allVertices[i] + alpha * neighborSum;
         }
 
         return result;
     }
 
-    // Étape 3: Appliquer le flipping des arêtes
     SubdivisionResult ApplyEdgeFlipping(Vector3[] vertices, int[] triangles, int[] originalTriangles, int originalVertexCount)
     {
         var result = new SubdivisionResult
@@ -246,7 +231,6 @@ public class KobbeltSubdivision : MonoBehaviour
             triangles = new List<int>()
         };
 
-        // Construire une map des arêtes originales vers les centres des triangles adjacents
         Dictionary<Edge, EdgeInfo> originalEdgeInfo = new Dictionary<Edge, EdgeInfo>();
 
         for (int i = 0; i < originalTriangles.Length; i += 3)
@@ -254,23 +238,19 @@ public class KobbeltSubdivision : MonoBehaviour
             int v0 = originalTriangles[i];
             int v1 = originalTriangles[i + 1];
             int v2 = originalTriangles[i + 2];
-            int centerIndex = originalVertexCount + (i / 3); // Index du centre de ce triangle
+            int centerIndex = originalVertexCount + (i / 3);
 
-            // Pour chaque arête, stocker l'information avec l'orientation correcte
             AddEdgeInfo(originalEdgeInfo, v0, v1, centerIndex);
             AddEdgeInfo(originalEdgeInfo, v1, v2, centerIndex);
             AddEdgeInfo(originalEdgeInfo, v2, v0, centerIndex);
         }
 
-        // Créer les nouveaux triangles avec flipping
         foreach (var kvp in originalEdgeInfo)
         {
             EdgeInfo info = kvp.Value;
 
             if (info.centers.Count == 2)
             {
-                // Arête interne: créer 2 triangles en connectant les centres
-                // Préserver l'orientation en utilisant l'ordre original des vertices
                 int c1 = info.centers[0];
                 int c2 = info.centers[1];
 
@@ -279,7 +259,6 @@ public class KobbeltSubdivision : MonoBehaviour
             }
             else if (info.centers.Count == 1)
             {
-                // Arête de frontière: créer 1 triangle
                 int c = info.centers[0];
                 result.triangles.AddRange(new int[] { info.v1, info.v2, c });
             }
