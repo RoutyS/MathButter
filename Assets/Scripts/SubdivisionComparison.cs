@@ -32,6 +32,7 @@ public class SubdivisionComparison : MonoBehaviour
         
         // Créer des labels
         CreateLabels();
+        CreateCatmullClarkCube();
     }
     
     void CreateReferenceCube()
@@ -54,7 +55,31 @@ public class SubdivisionComparison : MonoBehaviour
             AddWireframe(cubeObject, Color.white);
         }
     }
+    void CreateCatmullClarkCube()
+    {
+        GameObject cubeObject = new GameObject("Catmull-Clark Subdivision Cube");
+        cubeObject.transform.position = new Vector3(2 * cubeSpacing, 0, 0);
     
+        MeshFilter meshFilter = cubeObject.AddComponent<MeshFilter>();
+        MeshRenderer meshRenderer = cubeObject.AddComponent<MeshRenderer>();
+
+        meshFilter.mesh = CreateTriangulatedCubeMesh(); // Utiliser la même base
+
+        // Matériau (violet clair)
+        Material ccMat = new Material(Shader.Find("Standard"));
+        ccMat.color = new Color(0.6f, 0.4f, 1f); // light purple
+        meshRenderer.material = ccMat;
+
+        // Ajouter le script de subdivision Catmull-Clark
+        CatmullClark ccScript = cubeObject.AddComponent<CatmullClark>();
+        ccScript.subdivisionLevels = subdivisionLevels;
+
+        if (showWireframes)
+        {
+            AddWireframe(cubeObject, new Color(0.7f, 0.3f, 1f)); // wireframe violet
+        }
+    }
+
     void CreateLoopCube()
     {
         GameObject cubeObject = new GameObject("Loop Subdivision Cube");
@@ -188,10 +213,11 @@ public class SubdivisionComparison : MonoBehaviour
         Camera mainCamera = Camera.main;
         if (mainCamera != null)
         {
-            mainCamera.transform.position = new Vector3(0, 3, 6);
-            mainCamera.transform.LookAt(Vector3.zero);
+            mainCamera.transform.position = new Vector3(0, 3, 8); // un peu plus loin
+            mainCamera.transform.LookAt(new Vector3(cubeSpacing / 2f, 0, 0)); // centré
         }
     }
+
     
     void CreateLabels()
     {
@@ -209,6 +235,10 @@ public class SubdivisionComparison : MonoBehaviour
         
         GameObject infoLabel = new GameObject($"ℹ️ Subdivision Levels: {subdivisionLevels}");
         infoLabel.transform.SetParent(labelParent.transform);
+        
+        GameObject catmullClarkLabel = new GameObject("🟣 Catmull-Clark Subdivision (Far Right)");
+        catmullClarkLabel.transform.SetParent(labelParent.transform);
+
     }
     
     [ContextMenu("Increase Subdivision Level")]
@@ -241,6 +271,14 @@ public class SubdivisionComparison : MonoBehaviour
             kobbeltScript.subdivisionLevels = subdivisionLevels;
             kobbeltScript.ApplyKobbeltSubdivision();
         }
+        CatmullClark ccScript = FindObjectOfType<CatmullClark>();
+        if (ccScript != null)
+        {
+            ccScript.subdivisionLevels = subdivisionLevels;
+            ccScript.ApplyCatmullClarkSubdivision();
+        }
+
+        
         
         Debug.Log($"Updated subdivision levels to: {subdivisionLevels}");
     }
