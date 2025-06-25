@@ -646,8 +646,6 @@ GameObject:
   - component: {fileID: 1519538843}
   - component: {fileID: 1519538842}
   - component: {fileID: 1519538841}
-  - component: {fileID: 1519538846}
-  - component: {fileID: 1519538845}
   m_Layer: 0
   m_Name: ButterflyCube
   m_TagString: Untagged
@@ -667,8 +665,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 4513a81cd81e85b40b5eaf030d452f98, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  material: {fileID: 2100000, guid: 30e9f50507d37e54ca491d98caa2ca6e, type: 2}
   levels: 1
-  cubeMaterial: {fileID: 2100000, guid: aadd5a709a48466c887296bb5b1b8110, type: 2}
 --- !u!23 &1519538842
 MeshRenderer:
   m_ObjectHideFlags: 0
@@ -734,31 +732,6 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!114 &1519538845
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1519538840}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: a77e6cb8153b631478277c17ebd41678, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
---- !u!114 &1519538846
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1519538840}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 129f66c9157daf843b37d091f5366518, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  inputMeshFilter: {fileID: 0}
 --- !u!1 &1675241009
 GameObject:
   m_ObjectHideFlags: 0
