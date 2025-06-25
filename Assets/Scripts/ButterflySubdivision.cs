@@ -30,6 +30,9 @@ public class ButterflySubdivision : MonoBehaviour
     [Header("Mesh d'entrée")]
     public MeshFilter inputMeshFilter;
 
+    private List<(Vector3, Vector3)> debugLines = new List<(Vector3, Vector3)>();
+
+
     void Update()
     {
         if (Input.GetKeyDown(KeyCode.B))
@@ -160,6 +163,18 @@ public class ButterflySubdivision : MonoBehaviour
         sphere.GetComponent<Renderer>().material.color = Color.red;
         sphere.name = "ButterflyPoint";
 
+        // Debug lines pour comparer les points
+        Vector3 w1 = inputMeshFilter.transform.TransformPoint(v1);
+        Vector3 w2 = inputMeshFilter.transform.TransformPoint(v2);
+        Vector3 wMid = inputMeshFilter.transform.TransformPoint(mid);
+        Vector3 wMidLinear = 0.5f * (w1 + w2);
+
+        // Lignes visuelles
+        debugLines.Add((w1, wMid));
+        debugLines.Add((w2, wMid));
+        debugLines.Add((wMidLinear, wMid));
+
+
         return index;
     }
 
@@ -260,4 +275,14 @@ public class ButterflySubdivision : MonoBehaviour
             v2 = found[1];
         }
     }
+
+    void OnDrawGizmos()
+    {
+        Gizmos.color = Color.magenta;
+        foreach (var line in debugLines)
+        {
+            Gizmos.DrawLine(line.Item1, line.Item2);
+        }
+    }
+
 }
