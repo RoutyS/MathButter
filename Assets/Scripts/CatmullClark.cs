@@ -6,7 +6,7 @@ using UnityEngine;
 public class CatmullClark : MonoBehaviour
 {
     [Header("Catmull-Clark Subdivision")]
-    [Range(0, 3)] public int subdivisionLevels = 1;
+    [Range(0, 5)] public int subdivisionLevels = 1;
 
     private MeshFilter meshFilter;
     private Mesh originalMesh;
