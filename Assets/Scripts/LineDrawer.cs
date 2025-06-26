@@ -89,27 +89,31 @@ public class LineDrawer : MonoBehaviour
         }
 
         // Touche S : Appliquer Butterfly sur la surface Coons
-        if (Input.GetKeyDown(KeyCode.S))
+        if (Input.GetKeyDown(KeyCode.B))
         {
             GameObject coons = GameObject.Find("CoonsMesh");
             if (coons != null)
             {
-                var bf = FindObjectOfType<ButterflySubdivision>();
-                if (bf != null)
+                ButterflySubdivision butterfly = FindObjectOfType<ButterflySubdivision>();
+                if (butterfly != null)
                 {
-                    bf.inputMeshFilter = coons.GetComponent<MeshFilter>();
-                    Debug.Log("CoonsMesh assigné au script ButterflySubdivision !");
+                    MeshFilter mf = coons.GetComponent<MeshFilter>();
+
+                    butterfly.subdivisionLevels = 1;
+                    mf.sharedMesh = butterfly.SubdivideButterfly(mf.sharedMesh);
+                    Debug.Log("✅ CoonsMesh subdivisé automatiquement !");
                 }
                 else
                 {
-                    Debug.LogWarning("Aucun objet avec le script ButterflySubdivision trouvé dans la scène.");
+                    Debug.LogWarning("Aucun script ButterflySubdivision trouvé.");
                 }
             }
             else
             {
-                Debug.LogWarning("Aucun objet nommé 'CoonsMesh' trouvé !");
+                Debug.LogWarning("❌ Aucun objet nommé 'CoonsMesh' trouvé !");
             }
         }
+
 
     }
 
@@ -343,7 +347,6 @@ public class LineDrawer : MonoBehaviour
         Vector3[] vertices = new Vector3[rows * cols];
         int[] triangles = new int[(rows - 1) * (cols - 1) * 6];
 
-        // Aplatir la grille en tableau
         for (int i = 0; i < rows; i++)
         {
             for (int j = 0; j < cols; j++)
@@ -352,7 +355,6 @@ public class LineDrawer : MonoBehaviour
             }
         }
 
-        // Créer les triangles
         int t = 0;
         for (int i = 0; i < rows - 1; i++)
         {
@@ -373,30 +375,30 @@ public class LineDrawer : MonoBehaviour
             }
         }
 
-        // Créer le Mesh
-        GameObject surface = new GameObject("CoonsMesh", typeof(MeshFilter), typeof(MeshRenderer));
-
-        // Tenter d’assigner automatiquement le CoonsMesh au script ButterflySubdivision
-        ButterflySubdivision bs = FindObjectOfType<ButterflySubdivision>();
-        if (bs != null)
-        {
-            bs.inputMeshFilter = surface.GetComponent<MeshFilter>();
-            Debug.Log("✅ CoonsMesh assigné automatiquement à ButterflySubdivision");
-        }
-
-
+        // Crée le mesh Unity
+        GameObject coons = new GameObject("CoonsMesh", typeof(MeshFilter), typeof(MeshRenderer));
         Mesh mesh = new Mesh();
         mesh.vertices = vertices;
         mesh.triangles = triangles;
-        mesh.RecalculateNormals(); // pour l’éclairage
+        mesh.RecalculateNormals();
 
-        surface.GetComponent<MeshFilter>().mesh = mesh;
+        coons.GetComponent<MeshFilter>().mesh = mesh;
 
-        // Appliquer un matériau simple
         Material mat = new Material(Shader.Find("Standard"));
         mat.color = Color.cyan;
-        surface.GetComponent<MeshRenderer>().material = mat;
+        coons.GetComponent<MeshRenderer>().material = mat;
+
+        // ✅ Appliquer Butterfly immédiatement
+        ButterflySubdivision butterfly = FindObjectOfType<ButterflySubdivision>();
+        if (butterfly != null)
+        {
+            MeshFilter mf = coons.GetComponent<MeshFilter>();
+            butterfly.subdivisionLevels = 1;
+            mf.sharedMesh = butterfly.SubdivideButterfly(mf.sharedMesh);
+            Debug.Log("✅ Subdivision appliquée automatiquement au CoonsMesh nouvellement créé");
+        }
     }
+
 
 
 
@@ -458,7 +460,7 @@ public class LineDrawer : MonoBehaviour
             Debug.Log($"✅ Dernier point replacé par homothétie vers {target}");
         }
 
-
+        
 
         ApplyChaikin(); // maintenant on a les 4 coins
 

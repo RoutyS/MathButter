@@ -47,7 +47,6 @@ public class ButterflyMesh : MonoBehaviour
             Gizmos.DrawSphere(transform.TransformPoint(verts[i]), 0.03f);
         }
     }
-
 }
 
 
