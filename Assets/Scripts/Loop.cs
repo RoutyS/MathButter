@@ -4,6 +4,12 @@ using System.Linq;
 
 public class Loop : MonoBehaviour
 {
+    [Header("UV Mapping")]
+    public bool useAutoUV = true;
+    public AutoUVMapper.ProjectionMode uvMode = AutoUVMapper.ProjectionMode.SmartProjection;
+    private AutoUVMapper uvMapper;
+
+
     [Header("Subdivision Settings")]
     public int subdivisionLevels = 1;
     public bool autoUpdate = false;
@@ -41,6 +47,7 @@ public class Loop : MonoBehaviour
     void Start()
     {
         meshFilter = GetComponent<MeshFilter>();
+        SetupUV();
         if (meshFilter == null)
         {
             Debug.LogError("MeshFilter component required!");
@@ -61,7 +68,18 @@ public class Loop : MonoBehaviour
             ApplyLoopSubdivision();
         }
     }
-    
+    void SetupUV()
+    {
+        if (useAutoUV)
+        {
+            uvMapper = GetComponent<AutoUVMapper>();
+            if (uvMapper == null)
+                uvMapper = gameObject.AddComponent<AutoUVMapper>();
+            uvMapper.projectionMode = uvMode;
+        }
+    }
+
+
     [ContextMenu("Apply Loop Subdivision")]
     public void ApplyLoopSubdivision()
     {
@@ -78,6 +96,9 @@ public class Loop : MonoBehaviour
         FixTriangleOrientations(currentMesh);
         
         meshFilter.mesh = currentMesh;
+
+        if (useAutoUV && uvMapper != null)
+            uvMapper.GenerateUVs();
     }
     
     void FixTriangleOrientations(Mesh mesh)

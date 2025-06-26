@@ -5,6 +5,13 @@ using UnityEngine;
 [RequireComponent(typeof(MeshFilter), typeof(MeshRenderer))]
 public class CatmullClark : MonoBehaviour
 {
+    [Header("UV Mapping")]
+    public bool useAutoUV = true;
+    public AutoUVMapper.ProjectionMode uvMode = AutoUVMapper.ProjectionMode.SmartProjection;
+    private AutoUVMapper uvMapper;
+
+
+
     [Header("Catmull-Clark Subdivision")]
     [Range(0, 5)] public int subdivisionLevels = 1;
 
@@ -52,6 +59,7 @@ public class CatmullClark : MonoBehaviour
     void Start()
     {
         meshFilter = GetComponent<MeshFilter>();
+        SetupUV();
 
         // Use the Mesh from the MeshFilter by default
         if (inputMesh != null)
@@ -66,6 +74,18 @@ public class CatmullClark : MonoBehaviour
 
         ApplyCatmullClarkSubdivision();
     }
+
+    void SetupUV()
+    {
+        if (useAutoUV)
+        {
+            uvMapper = GetComponent<AutoUVMapper>();
+            if (uvMapper == null)
+                uvMapper = gameObject.AddComponent<AutoUVMapper>();
+            uvMapper.projectionMode = uvMode;
+        }
+    }
+
 
 
     [ContextMenu("Apply Catmull-Clark Subdivision")]
@@ -83,6 +103,9 @@ public class CatmullClark : MonoBehaviour
         FixTriangleOrientations(currentMesh); // ← À AJOUTER
 
         meshFilter.mesh = currentMesh;
+
+        if (useAutoUV && uvMapper != null)
+            uvMapper.GenerateUVs();
     }
     void FixTriangleOrientations(Mesh mesh)
     {

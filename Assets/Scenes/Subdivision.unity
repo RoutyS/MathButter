@@ -375,7 +375,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!4 &1170385029
 Transform:
   m_ObjectHideFlags: 0
@@ -403,7 +403,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: ae2e2edc264b44be9bc1d812b15513d9, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  kobbeltMaterial: {fileID: 0}
+  kobbeltMaterial: {fileID: 2100000, guid: aadd5a709a48466c887296bb5b1b8110, type: 2}
   showWireframe: 0
   subdivisionLevels: 1
   inputMesh: {fileID: 0}
@@ -530,7 +530,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 6f13a44cbc22a45439c48280038c1549, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  catmullMaterial: {fileID: 0}
+  catmullMaterial: {fileID: 2100000, guid: e6b9b44320f4448d9d5e0ee634259966, type: 2}
   showWireframes: 1
   subdivisionLevels: 1
   inputMesh: {fileID: -5287425419667122880, guid: ebf3d9dae65ebd5428c4f56be37a614c, type: 3}
@@ -578,7 +578,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: fe1da9c03d82f4057abccef13f270a52, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  loopMaterial: {fileID: 0}
+  loopMaterial: {fileID: 2100000, guid: 6c01c26311e744a898fbf7aaf2efaf46, type: 2}
   subdivisionLevels: 0
   inputMesh: {fileID: -2222346464153789849, guid: aa1af1b3084f7e8418fd6069e0d1a8c6, type: 3}
 --- !u!1 &1866403623

@@ -4,6 +4,12 @@ using UnityEngine;
 [RequireComponent(typeof(MeshFilter))]
 public class KobbeltSubdivision : MonoBehaviour
 {
+    [Header("UV Mapping")]
+    public bool useAutoUV = true;
+    public AutoUVMapper.ProjectionMode uvMode = AutoUVMapper.ProjectionMode.SmartProjection;
+    private AutoUVMapper uvMapper;
+
+
     [Header("√3 Subdivision Settings")]
     public int subdivisionLevels = 1;
     public bool autoUpdate = false;
@@ -38,6 +44,8 @@ public class KobbeltSubdivision : MonoBehaviour
     void Start()
     {
         meshFilter = GetComponent<MeshFilter>();
+        SetupUV();
+
         if (meshFilter == null)
         {
             Debug.LogError("MeshFilter component required!");
@@ -57,6 +65,18 @@ public class KobbeltSubdivision : MonoBehaviour
         }
     }
 
+    void SetupUV()
+    {
+        if (useAutoUV)
+        {
+            uvMapper = GetComponent<AutoUVMapper>();
+            if (uvMapper == null)
+                uvMapper = gameObject.AddComponent<AutoUVMapper>();
+            uvMapper.projectionMode = uvMode;
+        }
+    }
+
+
     [ContextMenu("Apply √3-Kobbelt Subdivision")]
     public void ApplyKobbeltSubdivision()
     {
@@ -70,7 +90,10 @@ public class KobbeltSubdivision : MonoBehaviour
         }
         FixTriangleOrientations(currentMesh);
         GetComponent<MeshFilter>().mesh = currentMesh;
-        
+
+        if (useAutoUV && uvMapper != null)
+            uvMapper.GenerateUVs();
+
     }
 
     Mesh PerformKobbeltSubdivision(Mesh inputMesh)
