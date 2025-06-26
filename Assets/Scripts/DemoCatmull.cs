@@ -3,12 +3,63 @@ using UnityEngine;
 public class DemoCatmull : MonoBehaviour
 {
     [Header("Catmull-Clark Settings")]
+    public Material catmullMaterial;
     public bool showWireframes = true;
     public int subdivisionLevels = 1;
+    public Mesh inputMesh;
 
     void Start()
     {
-        CreateCatmullClarkCube();
+        RandomMeshGenerator gen = GetComponent<RandomMeshGenerator>();
+
+        if (gen != null)
+        {
+            inputMesh = gen.GeneratedMesh;
+        }
+
+        if (inputMesh != null)
+        {
+            CreateCatmullClarkObject(inputMesh, "Catmull-Clark Object");
+        }
+        else
+        {
+            Debug.LogWarning("Aucun mesh assigné, création d'un cube par défaut");
+            CreateCatmullClarkCube();
+        }
+    }
+    
+
+
+    void CreateCatmullClarkObject(Mesh mesh, string name)
+    {
+        GameObject obj = new GameObject(name);
+        obj.transform.position = Vector3.zero;
+
+        MeshFilter meshFilter = obj.AddComponent<MeshFilter>();
+        MeshRenderer meshRenderer = obj.AddComponent<MeshRenderer>();
+
+        meshFilter.mesh = mesh;
+
+        if (catmullMaterial != null)
+        {
+            meshRenderer.material = catmullMaterial;
+        }
+        else
+        {
+            Material ccMat = new Material(Shader.Find("Standard"));
+            ccMat.color = new Color(0.6f, 0.4f, 1f); // light purple
+            meshRenderer.material = ccMat;
+        }
+
+        CatmullClark ccScript = obj.AddComponent<CatmullClark>();
+        ccScript.subdivisionLevels = subdivisionLevels;
+
+        if (showWireframes)
+        {
+            AddWireframe(obj, new Color(0.7f, 0.3f, 1f)); // wireframe violet
+        }
+
+        SetupCamera();
     }
 
     void CreateCatmullClarkCube()
@@ -21,10 +72,17 @@ public class DemoCatmull : MonoBehaviour
 
         meshFilter.mesh = CreateTriangulatedCubeMesh();
 
-        // Matériau violet clair
-        Material ccMat = new Material(Shader.Find("Standard"));
-        ccMat.color = new Color(0.6f, 0.4f, 1f); // light purple
-        meshRenderer.material = ccMat;
+        // Matériau pour Catmull-Clark
+        if (catmullMaterial != null)
+        {
+            meshRenderer.material = catmullMaterial;
+        }
+        else
+        {
+            Material ccMat = new Material(Shader.Find("Standard"));
+            ccMat.color = new Color(0.6f, 0.4f, 1f); // light purple
+            meshRenderer.material = ccMat;
+        }
 
         // Ajouter le script de subdivision Catmull-Clark
         CatmullClark ccScript = cubeObject.AddComponent<CatmullClark>();

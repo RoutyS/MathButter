@@ -5,15 +5,17 @@ public class DemoLoop : MonoBehaviour
 {
     [Header("Loop Subdivision Settings")]
     public Material loopMaterial;
-    public bool showWireframes = true;
+    //public bool showWireframes = true;
     public int subdivisionLevels = 1;
     public Mesh inputMesh;
+
+    private Mesh lastAppliedMesh;
 
     void Start()
     {
         if (inputMesh != null)
         {
-            CreateLoopObject(inputMesh, "Loop Subdivision Object");
+            ApplySelectedMesh();
         }
         else
         {
@@ -21,10 +23,37 @@ public class DemoLoop : MonoBehaviour
             CreateLoopCube();
         }
     }
+
+    void Update()
+    {
+        if (Application.isPlaying)
+        {
+            if (inputMesh != null && inputMesh != lastAppliedMesh)
+            {
+                ApplySelectedMesh();
+            }
+        }
+    }
+
+    public void ApplySelectedMesh()
+    {
+        lastAppliedMesh = inputMesh;
+
+        // Supprimer les anciens enfants (objets créés)
+        foreach (Transform child in transform)
+        {
+            Destroy(child.gameObject);
+        }
+
+        CreateLoopObject(inputMesh, "Loop Subdivision Object");
+        Debug.Log("Mesh appliqué depuis l'inspector !");
+    }
+
     void CreateLoopObject(Mesh mesh, string name)
     {
         GameObject obj = new GameObject(name);
-        obj.transform.position = Vector3.zero;
+        obj.transform.SetParent(transform);
+        obj.transform.localPosition = Vector3.zero;
 
         MeshFilter meshFilter = obj.AddComponent<MeshFilter>();
         MeshRenderer meshRenderer = obj.AddComponent<MeshRenderer>();
@@ -45,21 +74,21 @@ public class DemoLoop : MonoBehaviour
         Loop loopScript = obj.AddComponent<Loop>();
         loopScript.subdivisionLevels = subdivisionLevels;
 
-   
+       
         SetupCamera();
     }
 
     void CreateLoopCube()
     {
         GameObject cubeObject = new GameObject("Loop Subdivision Cube");
-        cubeObject.transform.position = Vector3.zero;
+        cubeObject.transform.SetParent(transform);
+        cubeObject.transform.localPosition = Vector3.zero;
 
         MeshFilter meshFilter = cubeObject.AddComponent<MeshFilter>();
         MeshRenderer meshRenderer = cubeObject.AddComponent<MeshRenderer>();
 
         meshFilter.mesh = CreateTriangulatedCubeMesh();
 
-        // Matériau pour Loop
         if (loopMaterial != null)
         {
             meshRenderer.material = loopMaterial;
@@ -71,19 +100,12 @@ public class DemoLoop : MonoBehaviour
             meshRenderer.material = loopMat;
         }
 
-        // Ajouter le script Loop
         Loop loopScript = cubeObject.AddComponent<Loop>();
         loopScript.subdivisionLevels = subdivisionLevels;
 
-        if (showWireframes)
-        {
-            AddWireframe(cubeObject, Color.blue);
-        }
 
-        // Centrer la caméra sur ce cube
         SetupCamera();
     }
-    
 
     Mesh CreateTriangulatedCubeMesh()
     {
@@ -91,13 +113,10 @@ public class DemoLoop : MonoBehaviour
 
         Vector3[] vertices = new Vector3[]
         {
-            // Face avant
             new Vector3(-1, -1,  1), // 0
             new Vector3( 1, -1,  1), // 1
             new Vector3( 1,  1,  1), // 2
             new Vector3(-1,  1,  1), // 3
-
-            // Face arrière
             new Vector3(-1, -1, -1), // 4
             new Vector3( 1, -1, -1), // 5
             new Vector3( 1,  1, -1), // 6
@@ -106,12 +125,12 @@ public class DemoLoop : MonoBehaviour
 
         int[] triangles = new int[]
         {
-            0, 2, 1,  0, 3, 2,     // Face avant
-            1, 2, 6,  1, 6, 5,     // Face droite
-            5, 6, 7,  5, 7, 4,     // Face arrière
-            4, 7, 3,  4, 3, 0,     // Face gauche
-            3, 7, 6,  3, 6, 2,     // Face haut
-            4, 0, 1,  4, 1, 5      // Face bas
+            0, 2, 1,  0, 3, 2,     // Avant
+            1, 2, 6,  1, 6, 5,     // Droite
+            5, 6, 7,  5, 7, 4,     // Arrière
+            4, 7, 3,  4, 3, 0,     // Gauche
+            3, 7, 6,  3, 6, 2,     // Haut
+            4, 0, 1,  4, 1, 5      // Bas
         };
 
         mesh.vertices = vertices;
@@ -122,7 +141,7 @@ public class DemoLoop : MonoBehaviour
         return mesh;
     }
 
-    void AddWireframe(GameObject target, Color wireframeColor)
+    /*void AddWireframe(GameObject target, Color wireframeColor)
     {
         GameObject wireframeObject = new GameObject("Wireframe");
         wireframeObject.transform.SetParent(target.transform);
@@ -138,8 +157,8 @@ public class DemoLoop : MonoBehaviour
         wireframeMaterial.color = wireframeColor;
         wireframeMeshRenderer.material = wireframeMaterial;
 
-        WireframeRenderer wireframeScript = wireframeObject.AddComponent<WireframeRenderer>();
-    }
+        wireframeObject.AddComponent<WireframeRenderer>();
+    }*/
 
     void SetupCamera()
     {

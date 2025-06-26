@@ -11,6 +11,9 @@ public class CatmullClark : MonoBehaviour
     private MeshFilter meshFilter;
     private Mesh originalMesh;
 
+    public Mesh inputMesh; 
+
+
     // Classes internes pour Edge et Face (identiques à ton script)
     public class Edge
     {
@@ -50,8 +53,13 @@ public class CatmullClark : MonoBehaviour
     {
         meshFilter = GetComponent<MeshFilter>();
 
-        originalMesh = CreateCubeMesh();
-        meshFilter.mesh = originalMesh;
+        if (inputMesh != null)
+            originalMesh = Weld(inputMesh); // optionnel : nettoyage
+        else
+        {
+            Debug.LogWarning("No mesh assigned, using default cube.");
+            originalMesh = CreateCubeMesh();
+        }
 
         ApplyCatmullClarkSubdivision();
     }
@@ -68,7 +76,118 @@ public class CatmullClark : MonoBehaviour
             currentMesh = SubdivideMesh(currentMesh);
         }
 
+        FixTriangleOrientations(currentMesh); // ← À AJOUTER
+
         meshFilter.mesh = currentMesh;
+    }
+    void FixTriangleOrientations(Mesh mesh)
+    {
+        Vector3[] vertices = mesh.vertices;
+        int[] triangles = mesh.triangles;
+        int triangleCount = triangles.Length / 3;
+
+        if (triangleCount == 0) return;
+
+        // 1. Construire la liste des triangles adjacents
+        Dictionary<Edge, List<int>> edgeToTriangles = new Dictionary<Edge, List<int>>();
+
+        for (int i = 0; i < triangleCount; i++)
+        {
+            int i0 = triangles[i * 3];
+            int i1 = triangles[i * 3 + 1];
+            int i2 = triangles[i * 3 + 2];
+
+            AddEdgeTriangle(edgeToTriangles, new Edge(i0, i1), i);
+            AddEdgeTriangle(edgeToTriangles, new Edge(i1, i2), i);
+            AddEdgeTriangle(edgeToTriangles, new Edge(i2, i0), i);
+        }
+
+        // 2. Propagation d'orientation
+        bool[] processed = new bool[triangleCount];
+        bool[] shouldFlip = new bool[triangleCount];
+
+        // Commencer avec le premier triangle (supposé bien orienté)
+        Queue<int> toProcess = new Queue<int>();
+        toProcess.Enqueue(0);
+        processed[0] = true;
+
+        while (toProcess.Count > 0)
+        {
+            int currentTriangle = toProcess.Dequeue();
+
+            // Examiner tous les triangles voisins
+            for (int edge = 0; edge < 3; edge++)
+            {
+                int v1 = triangles[currentTriangle * 3 + edge];
+                int v2 = triangles[currentTriangle * 3 + (edge + 1) % 3];
+
+                Edge sharedEdge = new Edge(v1, v2);
+
+                if (edgeToTriangles.ContainsKey(sharedEdge))
+                {
+                    foreach (int neighborTriangle in edgeToTriangles[sharedEdge])
+                    {
+                        if (neighborTriangle == currentTriangle || processed[neighborTriangle])
+                            continue;
+
+                        // Vérifier si l'orientation est cohérente
+                        if (!AreTrianglesConsistentlyOriented(triangles, currentTriangle, neighborTriangle, shouldFlip[currentTriangle]))
+                        {
+                            shouldFlip[neighborTriangle] = true;
+                        }
+
+                        processed[neighborTriangle] = true;
+                        toProcess.Enqueue(neighborTriangle);
+                    }
+                }
+            }
+        }
+    }
+    bool AreTrianglesConsistentlyOriented(int[] triangles, int tri1, int tri2, bool tri1IsFlipped)
+    {
+        int[] t1 = { triangles[tri1 * 3], triangles[tri1 * 3 + 1], triangles[tri1 * 3 + 2] };
+        int[] t2 = { triangles[tri2 * 3], triangles[tri2 * 3 + 1], triangles[tri2 * 3 + 2] };
+
+        List<int> shared = new List<int>();
+        List<int> t1Indices = new List<int>();
+        List<int> t2Indices = new List<int>();
+
+        for (int i = 0; i < 3; i++)
+        {
+            for (int j = 0; j < 3; j++)
+            {
+                if (t1[i] == t2[j])
+                {
+                    shared.Add(t1[i]);
+                    t1Indices.Add(i);
+                    t2Indices.Add(j);
+                }
+            }
+        }
+
+        if (shared.Count != 2) return true;
+
+        int t1EdgeStart = t1Indices[0];
+        int t1EdgeEnd = t1Indices[1];
+        int t2EdgeStart = t2Indices[0];
+        int t2EdgeEnd = t2Indices[1];
+
+        bool t1Forward = (t1EdgeEnd == (t1EdgeStart + 1) % 3);
+        bool t2Forward = (t2EdgeEnd == (t2EdgeStart + 1) % 3);
+
+        if (tri1IsFlipped) t1Forward = !t1Forward;
+
+        return t1Forward != t2Forward;
+    }
+
+
+    void AddEdgeTriangle(Dictionary<Edge, List<int>> dict, Edge edge, int triangleIndex)
+    {
+        if (!dict.ContainsKey(edge))
+        {
+            dict[edge] = new List<int>();
+        }
+        dict[edge].Add(triangleIndex);
     }
 
     Mesh CreateCubeMesh()
@@ -267,6 +386,41 @@ public class CatmullClark : MonoBehaviour
 
         return newVerts;
     }
+
+    Mesh Weld(Mesh m)
+    {
+        var oldV = m.vertices;
+        var oldT = m.triangles;
+        var map = new Dictionary<Vector3, int>();
+        var newV = new List<Vector3>();
+        var remap = new int[oldV.Length];
+
+        // 1) Créer la table de hachage
+        for (int i = 0; i < oldV.Length; i++)
+        {
+            if (!map.TryGetValue(oldV[i], out int idx))
+            {
+                idx = newV.Count;
+                newV.Add(oldV[i]);
+                map[oldV[i]] = idx;
+            }
+            remap[i] = idx;
+        }
+
+        // 2) Réindexer les triangles
+        var newT = new int[oldT.Length];
+        for (int i = 0; i < oldT.Length; i++)
+            newT[i] = remap[oldT[i]];
+
+        // 3) Construire et retourner le mesh
+        var nm = new Mesh();
+        nm.vertices = newV.ToArray();
+        nm.triangles = newT;
+        nm.RecalculateNormals();
+        nm.RecalculateBounds();
+        return nm;
+    }
+
 
     Mesh BuildNewMesh(Vector3[] originalVertices, List<Face> faces, List<Edge> edges,
                       List<Vector3> edgePoints, List<Vector3> newVertexPoints,
