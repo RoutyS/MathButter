@@ -1,9 +1,18 @@
 using System.Collections.Generic;
 using UnityEngine;
 
+public enum SubdivisionType
+{
+    Loop,
+    Kobbelt,
+    CatmullClark
+}
+
 public class DemoMeshComparaison : MonoBehaviour
 {
-    [Header("Loop Subdivision Settings")]
+    [Header("Subdivision Settings")]
+    public SubdivisionType subdivisionType = SubdivisionType.Loop;
+
     public Material loopMaterial;
     public bool showWireframes = true;
     public int subdivisionLevels = 1;
@@ -29,18 +38,32 @@ public class DemoMeshComparaison : MonoBehaviour
         List<int> triangles = new List<int>();
         List<Vector2> uvs = new List<Vector2>();
 
-        // Génération des sommets et UVs
+        // Paramètres pour générer des pics
+        float peakHeight = 3f;    // Hauteur max des pics
+        float noiseScale = 2f;    // Échelle du bruit Perlin
+        float spikeChance = 0.1f; // Probabilité d'avoir un pic à un sommet
+
         for (int y = 0; y <= height; y++)
         {
             for (int x = 0; x <= width; x++)
             {
                 float xPos = x * scale;
-                float yPos = 0f; // tu peux ajouter du bruit ici si tu veux un relief
                 float zPos = y * scale;
+
+                // Base hauteur avec Perlin noise
+                float baseHeight = Mathf.PerlinNoise(x * noiseScale / width, y * noiseScale / height);
+
+                // Générer un pic avec une certaine probabilité
+                float yPos = baseHeight;
+
+                if (Random.value < spikeChance)
+                {
+                    // Pic pointu : on ajoute une valeur élevée multipliée par un facteur aléatoire
+                    yPos += peakHeight * Random.Range(0.5f, 1f);
+                }
 
                 vertices.Add(new Vector3(xPos, yPos, zPos));
 
-                // UV normalisé de 0 à 1
                 float u = (float)x / width;
                 float v = (float)y / height;
                 uvs.Add(new Vector2(u, v));
@@ -57,12 +80,10 @@ public class DemoMeshComparaison : MonoBehaviour
                 int iBelow = i + (width + 1);
                 int iBelowRight = iBelow + 1;
 
-                // Triangle 1
                 triangles.Add(i);
                 triangles.Add(iBelow);
                 triangles.Add(iRight);
 
-                // Triangle 2
                 triangles.Add(iRight);
                 triangles.Add(iBelow);
                 triangles.Add(iBelowRight);
@@ -70,7 +91,7 @@ public class DemoMeshComparaison : MonoBehaviour
         }
 
         mesh.SetVertices(vertices);
-        mesh.SetUVs(0, uvs);  // ASSIGNE LES UVs ICI
+        mesh.SetUVs(0, uvs);
         mesh.SetTriangles(triangles, 0);
         mesh.RecalculateNormals();
         mesh.RecalculateBounds();
@@ -120,11 +141,25 @@ public class DemoMeshComparaison : MonoBehaviour
             Destroy(child.gameObject);
         }
 
-        CreateLoopObject(inputMesh, "Loop Subdivision Object");
-        Debug.Log("Mesh appliqué depuis l'inspector !");
+        switch(subdivisionType)
+        {
+            case SubdivisionType.Loop:
+                CreateSubdivisionObject<Loop>(inputMesh, "Loop Subdivision Object");
+                break;
+
+            case SubdivisionType.Kobbelt:
+                CreateSubdivisionObject<KobbeltSubdivision>(inputMesh, "Kobbelt Subdivision Object");
+                break;
+
+            case SubdivisionType.CatmullClark:
+                CreateSubdivisionObject<CatmullClark>(inputMesh, "Catmull-Clark Subdivision Object");
+                break;
+        }
+
+        Debug.Log("Mesh appliqué avec subdivision : " + subdivisionType);
     }
 
-    void CreateLoopObject(Mesh mesh, string name)
+    void CreateSubdivisionObject<T>(Mesh mesh, string name) where T : MonoBehaviour
     {
         GameObject obj = new GameObject(name);
         obj.transform.SetParent(transform);
@@ -141,87 +176,24 @@ public class DemoMeshComparaison : MonoBehaviour
         }
         else
         {
-            // fallback: un matériau blanc standard si pas de damier assigné
             Material defaultMat = new Material(Shader.Find("Standard"));
             defaultMat.color = Color.white;
             meshRenderer.material = defaultMat;
         }
 
-        Loop loopScript = obj.AddComponent<Loop>();
-        loopScript.subdivisionLevels = subdivisionLevels;
+        T subdivisionScript = obj.AddComponent<T>();
+
+        // Essaie de configurer subdivisionLevels et appliquer la subdivision
+        var subdivisionLevelsProperty = typeof(T).GetProperty("subdivisionLevels");
+        var applySubdivisionMethod = typeof(T).GetMethod("ApplySubdivision");
+
+        if (subdivisionLevelsProperty != null)
+            subdivisionLevelsProperty.SetValue(subdivisionScript, subdivisionLevels);
+
+        if (applySubdivisionMethod != null)
+            applySubdivisionMethod.Invoke(subdivisionScript, null);
 
         SetupCamera();
-    }
-
-    void CreateLoopCube()
-    {
-        GameObject cubeObject = new GameObject("Loop Subdivision Cube");
-        cubeObject.transform.SetParent(transform);
-        cubeObject.transform.localPosition = Vector3.zero;
-
-        MeshFilter meshFilter = cubeObject.AddComponent<MeshFilter>();
-        MeshRenderer meshRenderer = cubeObject.AddComponent<MeshRenderer>();
-
-        meshFilter.mesh = CreateTriangulatedCubeMesh();
-
-        if (loopMaterial != null)
-        {
-            meshRenderer.material = loopMaterial;
-        }
-        else
-        {
-            // Tu peux mettre une couleur par défaut ici ou un autre matériau par défaut
-            Material defaultMat = new Material(Shader.Find("Standard"));
-            defaultMat.color = Color.white;
-            meshRenderer.material = defaultMat;
-        }
-
-        Loop loopScript = cubeObject.AddComponent<Loop>();
-        loopScript.subdivisionLevels = subdivisionLevels;
-
-        SetupCamera();
-    }
-
-    Mesh CreateTriangulatedCubeMesh()
-    {
-        Mesh mesh = new Mesh();
-
-        Vector3[] vertices = new Vector3[]
-        {
-            new Vector3(-1, -1,  1), // 0
-            new Vector3( 1, -1,  1), // 1
-            new Vector3( 1,  1,  1), // 2
-            new Vector3(-1,  1,  1), // 3
-            new Vector3(-1, -1, -1), // 4
-            new Vector3( 1, -1, -1), // 5
-            new Vector3( 1,  1, -1), // 6
-            new Vector3(-1,  1, -1), // 7
-        };
-
-        int[] triangles = new int[]
-        {
-            0, 2, 1,  0, 3, 2,     // Avant
-            1, 2, 6,  1, 6, 5,     // Droite
-            5, 6, 7,  5, 7, 4,     // Arrière
-            4, 7, 3,  4, 3, 0,     // Gauche
-            3, 7, 6,  3, 6, 2,     // Haut
-            4, 0, 1,  4, 1, 5      // Bas
-        };
-
-        // UVs simples pour chaque sommet (une approximation pour un cube)
-        Vector2[] uvs = new Vector2[]
-        {
-            new Vector2(0, 0), new Vector2(1, 0), new Vector2(1, 1), new Vector2(0, 1),
-            new Vector2(0, 0), new Vector2(1, 0), new Vector2(1, 1), new Vector2(0, 1),
-        };
-
-        mesh.vertices = vertices;
-        mesh.triangles = triangles;
-        mesh.uv = uvs;  // ASSIGNATION UVS ICI
-        mesh.RecalculateNormals();
-        mesh.RecalculateBounds();
-
-        return mesh;
     }
 
     void SetupCamera()
@@ -250,11 +222,32 @@ public class DemoMeshComparaison : MonoBehaviour
 
     void UpdateSubdivisionLevels()
     {
-        Loop loopScript = FindObjectOfType<Loop>();
-        if (loopScript != null)
+        // Trouve le script de subdivision actuellement actif
+        MonoBehaviour subdivisionScript = null;
+
+        // On cherche parmi les enfants (car on recrée un GameObject pour la subdivision)
+        foreach (Transform child in transform)
         {
-            loopScript.subdivisionLevels = subdivisionLevels;
-            loopScript.ApplyLoopSubdivision();
+            subdivisionScript = child.GetComponent<Loop>() as MonoBehaviour;
+            if (subdivisionScript != null) break;
+
+            subdivisionScript = child.GetComponent<KobbeltSubdivision>() as MonoBehaviour;
+            if (subdivisionScript != null) break;
+
+            subdivisionScript = child.GetComponent<CatmullClark>() as MonoBehaviour;
+            if (subdivisionScript != null) break;
+        }
+
+        if (subdivisionScript != null)
+        {
+            var subdivisionLevelsProperty = subdivisionScript.GetType().GetProperty("subdivisionLevels");
+            var applySubdivisionMethod = subdivisionScript.GetType().GetMethod("ApplySubdivision");
+
+            if (subdivisionLevelsProperty != null)
+                subdivisionLevelsProperty.SetValue(subdivisionScript, subdivisionLevels);
+
+            if (applySubdivisionMethod != null)
+                applySubdivisionMethod.Invoke(subdivisionScript, null);
         }
 
         Debug.Log($"Updated subdivision levels to: {subdivisionLevels}");

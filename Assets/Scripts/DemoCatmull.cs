@@ -54,11 +54,7 @@ public class DemoCatmull : MonoBehaviour
         CatmullClark ccScript = obj.AddComponent<CatmullClark>();
         ccScript.subdivisionLevels = subdivisionLevels;
 
-        if (showWireframes)
-        {
-            AddWireframe(obj, new Color(0.7f, 0.3f, 1f)); // wireframe violet
-        }
-
+       
         SetupCamera();
     }
 
@@ -88,10 +84,7 @@ public class DemoCatmull : MonoBehaviour
         CatmullClark ccScript = cubeObject.AddComponent<CatmullClark>();
         ccScript.subdivisionLevels = subdivisionLevels;
 
-        if (showWireframes)
-        {
-            AddWireframe(cubeObject, new Color(0.7f, 0.3f, 1f)); // wireframe violet
-        }
+       
 
         SetupCamera();
     }

@@ -53,16 +53,20 @@ public class CatmullClark : MonoBehaviour
     {
         meshFilter = GetComponent<MeshFilter>();
 
+        // Use the Mesh from the MeshFilter by default
         if (inputMesh != null)
-            originalMesh = Weld(inputMesh); // optionnel : nettoyage
+            originalMesh = Weld(inputMesh);
+        else if (meshFilter.sharedMesh != null)
+            originalMesh = Weld(meshFilter.sharedMesh);
         else
         {
-            Debug.LogWarning("No mesh assigned, using default cube.");
+            Debug.LogWarning("No mesh found, using default cube.");
             originalMesh = CreateCubeMesh();
         }
 
         ApplyCatmullClarkSubdivision();
     }
+
 
     [ContextMenu("Apply Catmull-Clark Subdivision")]
     public void ApplyCatmullClarkSubdivision()
