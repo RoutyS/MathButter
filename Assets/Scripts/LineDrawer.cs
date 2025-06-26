@@ -73,13 +73,13 @@ public class LineDrawer : MonoBehaviour
         // ---- Touche C : lissage Chaikin ----
         if (Input.GetKeyDown(KeyCode.C))
         {
-            DisplayCurrentChaikin(); 
+            DisplayCurrentChaikin();
         }
 
         // ---- Touche N : Valide la courbe actuelle et passe à la suivante ----
         if (Input.GetKeyDown(KeyCode.N))
         {
-            ValidateCurrentCurve(); 
+            ValidateCurrentCurve();
         }
 
         // ---- Touche R : reset ----
@@ -89,7 +89,7 @@ public class LineDrawer : MonoBehaviour
         }
 
         // Touche S : Appliquer Butterfly sur la surface Coons
-        if (Input.GetKeyDown(KeyCode.B))
+        /*if (Input.GetKeyDown(KeyCode.B))
         {
             GameObject coons = GameObject.Find("CoonsMesh");
             if (coons != null)
@@ -99,7 +99,7 @@ public class LineDrawer : MonoBehaviour
                 {
                     MeshFilter mf = coons.GetComponent<MeshFilter>();
 
-                    int levels = 1;          
+                    int levels = 1;
                     Mesh m = mf.sharedMesh;
                     for (int i = 0; i < levels; i++)
                         m = butterfly.SubdivideButterfly(m);
@@ -116,7 +116,7 @@ public class LineDrawer : MonoBehaviour
             {
                 Debug.LogWarning("❌ Aucun objet nommé 'CoonsMesh' trouvé !");
             }
-        }
+        }*/
 
 
     }
@@ -393,7 +393,7 @@ public class LineDrawer : MonoBehaviour
         coons.GetComponent<MeshRenderer>().material = mat;
 
         // ✅ Appliquer Butterfly immédiatement
-        ButterflySubdivision butterfly = FindObjectOfType<ButterflySubdivision>();
+        /*ButterflySubdivision butterfly = FindObjectOfType<ButterflySubdivision>();
         if (butterfly != null)
         {
             MeshFilter mf = coons.GetComponent<MeshFilter>();
@@ -405,7 +405,7 @@ public class LineDrawer : MonoBehaviour
 
             mf.sharedMesh = butterfly.SubdivideButterfly(mf.sharedMesh);
             Debug.Log("✅ Subdivision appliquée automatiquement au CoonsMesh nouvellement créé");
-        }
+        }*/
     }
 
 
@@ -421,7 +421,7 @@ public class LineDrawer : MonoBehaviour
         originalLine.positionCount = 0;
         chaikinLine.positionCount = 0;
 
-        
+
     }
 
     // ------------------------------------------------------------------
@@ -469,7 +469,7 @@ public class LineDrawer : MonoBehaviour
             Debug.Log($"✅ Dernier point replacé par homothétie vers {target}");
         }
 
-        
+
 
         ApplyChaikin(); // maintenant on a les 4 coins
 
