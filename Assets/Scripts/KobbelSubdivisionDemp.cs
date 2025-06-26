@@ -19,7 +19,6 @@ public class KobbeltSubdivisionDemo : MonoBehaviour
     public enum MapType
     {
         FlatTerrain,      // Terrain plat avec légères variations
-        HillyTerrain,     // Terrain vallonné
         MountainTerrain,  // Terrain montagneux
         Island,           // Île avec plage
         Valley,           // Vallée
@@ -103,7 +102,6 @@ public class KobbeltSubdivisionDemo : MonoBehaviour
         switch (mapType)
         {
             case MapType.FlatTerrain: return new Color(0.4f, 0.8f, 0.2f); // Vert prairie
-            case MapType.HillyTerrain: return new Color(0.3f, 0.7f, 0.3f); // Vert colline
             case MapType.MountainTerrain: return new Color(0.6f, 0.5f, 0.4f); // Brun montagne
             case MapType.Island: return new Color(0.8f, 0.7f, 0.5f); // Beige sable
             case MapType.Valley: return new Color(0.2f, 0.6f, 0.3f); // Vert foncé
@@ -192,10 +190,7 @@ public class KobbeltSubdivisionDemo : MonoBehaviour
                 height = Mathf.PerlinNoise(x * noiseScale, z * noiseScale) * heightVariation * 0.2f;
                 break;
                 
-            case MapType.HillyTerrain:
-                height = Mathf.PerlinNoise(x * noiseScale, z * noiseScale) * heightVariation;
-                height += Mathf.PerlinNoise(x * noiseScale * 2f, z * noiseScale * 2f) * heightVariation * 0.3f;
-                break;
+         
                 
             case MapType.MountainTerrain:
                 height = Mathf.PerlinNoise(x * noiseScale, z * noiseScale) * heightVariation * 2f;
