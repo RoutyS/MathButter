@@ -99,8 +99,12 @@ public class LineDrawer : MonoBehaviour
                 {
                     MeshFilter mf = coons.GetComponent<MeshFilter>();
 
-                    butterfly.subdivisionLevels = 1;
-                    mf.sharedMesh = butterfly.SubdivideButterfly(mf.sharedMesh);
+                    int levels = 1;          
+                    Mesh m = mf.sharedMesh;
+                    for (int i = 0; i < levels; i++)
+                        m = butterfly.SubdivideButterfly(m);
+                    mf.sharedMesh = m;
+
                     Debug.Log("✅ CoonsMesh subdivisé automatiquement !");
                 }
                 else
@@ -393,7 +397,12 @@ public class LineDrawer : MonoBehaviour
         if (butterfly != null)
         {
             MeshFilter mf = coons.GetComponent<MeshFilter>();
-            butterfly.subdivisionLevels = 1;
+            int levels = 1;   // Choisis ici combien de fois tu veux subdiviser
+            Mesh m = mf.sharedMesh;
+            for (int i = 0; i < levels; i++)
+                m = butterfly.SubdivideButterfly(m);
+            mf.sharedMesh = m;
+
             mf.sharedMesh = butterfly.SubdivideButterfly(mf.sharedMesh);
             Debug.Log("✅ Subdivision appliquée automatiquement au CoonsMesh nouvellement créé");
         }

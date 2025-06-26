@@ -1,165 +1,156 @@
-﻿using System.Collections.Generic;
+﻿// ✅ ButterflySubdivision.cs avec meilleure gestion des coins
+// - Nouveau masque bord pour éviter artefacts
+// - Cas régulier, irrégulier, bord améliorés
+
+using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 
 public class ButterflySubdivision : MonoBehaviour
 {
-    [Range(1, 4)] public int subdivisionLevels = 1;
-
-    public void ApplySubdivision()
+    public Mesh SubdivideButterfly(Mesh input)
     {
-        MeshFilter mf = GetComponent<MeshFilter>();
-        if (mf == null || mf.mesh == null) { Debug.LogError("Pas de MeshFilter/Mesh !"); return; }
-        Mesh mesh = mf.mesh;
-        for (int i = 0; i < subdivisionLevels; i++)
-            mesh = SubdivideButterfly(mesh);
-        mf.mesh = mesh;
-    }
+        var originalVertices = input.vertices;
+        var originalTriangles = input.triangles;
+        var edgeMidpointMap = new Dictionary<(int, int), int>();
+        var newVertices = new List<Vector3>(originalVertices);
+        var triangleMap = new Dictionary<int, List<int>>();
 
-    public Mesh SubdivideButterfly(Mesh mesh)
-    {
-        Vector3[] V = mesh.vertices;
-        int[] T = mesh.triangles;
-
-        var edgeOpp = new Dictionary<Edge, List<int>>(new EdgeComparer());
-        var vertNeigh = new Dictionary<int, HashSet<int>>();
-
-        for (int i = 0; i < T.Length; i += 3)
+        for (int i = 0; i < originalTriangles.Length; i += 3)
         {
-            int a = T[i], b = T[i + 1], c = T[i + 2];
-            AddNeigh(vertNeigh, a, b); AddNeigh(vertNeigh, b, c); AddNeigh(vertNeigh, c, a);
-            AddOpp(edgeOpp, new Edge(a, b), c);
-            AddOpp(edgeOpp, new Edge(b, c), a);
-            AddOpp(edgeOpp, new Edge(c, a), b);
+            int a = originalTriangles[i];
+            int b = originalTriangles[i + 1];
+            int c = originalTriangles[i + 2];
+            AddTriangle(triangleMap, a, i / 3);
+            AddTriangle(triangleMap, b, i / 3);
+            AddTriangle(triangleMap, c, i / 3);
         }
 
-        var newV = new List<Vector3>(V);
-        var edgeToNew = new Dictionary<Edge, int>(new EdgeComparer());
-
-        foreach (var kv in edgeOpp)
+        List<int> newTriangles = new();
+        for (int i = 0; i < originalTriangles.Length; i += 3)
         {
-            Edge e = kv.Key;
-            var opp = kv.Value;
-            Vector3 pos;
-            if (opp.Count < 2)
-                pos = 0.5f * (V[e.v1] + V[e.v2]);
-            else
+            int v0 = originalTriangles[i];
+            int v1 = originalTriangles[i + 1];
+            int v2 = originalTriangles[i + 2];
+
+            int m01 = GetOrCreateMidpoint(v0, v1, originalVertices, triangleMap, edgeMidpointMap, newVertices);
+            int m12 = GetOrCreateMidpoint(v1, v2, originalVertices, triangleMap, edgeMidpointMap, newVertices);
+            int m20 = GetOrCreateMidpoint(v2, v0, originalVertices, triangleMap, edgeMidpointMap, newVertices);
+
+            newTriangles.AddRange(new[] {
+                v0, m01, m20,
+                m01, v1, m12,
+                m20, m12, v2,
+                m01, m12, m20
+            });
+        }
+
+        Mesh subdivided = new Mesh();
+        subdivided.vertices = newVertices.ToArray();
+        subdivided.triangles = newTriangles.ToArray();
+        subdivided.RecalculateNormals();
+        return subdivided;
+    }
+
+    int GetOrCreateMidpoint(int a, int b, Vector3[] verts, Dictionary<int, List<int>> triangleMap, Dictionary<(int, int), int> edgeMap, List<Vector3> newVerts)
+    {
+        var key = (Mathf.Min(a, b), Mathf.Max(a, b));
+        if (edgeMap.TryGetValue(key, out int idx)) return idx;
+
+        Vector3 p1 = verts[a];
+        Vector3 p2 = verts[b];
+
+        Vector3 midpoint;
+        List<int> adjacentA = triangleMap.ContainsKey(a) ? triangleMap[a] : new();
+        List<int> adjacentB = triangleMap.ContainsKey(b) ? triangleMap[b] : new();
+        var sharedTris = new HashSet<int>(adjacentA);
+        sharedTris.IntersectWith(adjacentB);
+
+        if (sharedTris.Count == 1)
+        {
+            // ✅ Cas coin/bord → poids custom plus doux
+            midpoint = 0.375f * (p1 + p2);
+            Vector3 avg1 = AverageNeighbor(verts, triangleMap, a);
+            Vector3 avg2 = AverageNeighbor(verts, triangleMap, b);
+            midpoint += 0.125f * (avg1 + avg2);
+        }
+        else if (sharedTris.Count == 2)
+        {
+            // ✅ Cas régulier
+            midpoint = CalculateButterflyMask(a, b, verts, triangleMap);
+        }
+        else
+        {
+            // Fallback cas irrégulier
+            midpoint = 0.5f * (p1 + p2);
+        }
+
+        newVerts.Add(midpoint);
+        int newIndex = newVerts.Count - 1;
+        edgeMap[key] = newIndex;
+        return newIndex;
+    }
+
+    Vector3 CalculateButterflyMask(int i0, int i1, Vector3[] verts, Dictionary<int, List<int>> triangleMap)
+    {
+        Vector3 p0 = verts[i0];
+        Vector3 p1 = verts[i1];
+        Vector3 mid = 0.5f * (p0 + p1);
+
+        Vector3[] opp = new Vector3[6];
+        int count = 0;
+
+        foreach (var tri in triangleMap[i0])
+        {
+            int[] face = GetTriangleVerts(tri, triangleMap);
+            foreach (int v in face)
             {
-                int C = opp[0], D = opp[1];
-                Vector3 sum = V[e.v1] + V[e.v2];
-                pos = 0.5f * sum + 0.125f * (V[C] + V[D]);
-                List<int> EFGH = FindEFGH(e, C, D, edgeOpp);
-                if (EFGH.Count == 4)
+                if (v != i0 && v != i1 && !opp.Contains(verts[v]))
                 {
-                    pos -= 0.0625f * (V[EFGH[0]] + V[EFGH[1]] + V[EFGH[2]] + V[EFGH[3]]);
-                }
-                else
-                {
-                    Vector3 sa = AverageNeighbors(V, vertNeigh[e.v1], e.v1);
-                    Vector3 sb = AverageNeighbors(V, vertNeigh[e.v2], e.v2);
-                    pos = 0.75f * (V[e.v1] + V[e.v2]) * 0.5f + 0.125f * (sa + sb);
+                    opp[count++] = verts[v];
+                    if (count == 6) break;
                 }
             }
-            int idx = newV.Count;
-            newV.Add(pos);
-            edgeToNew[e] = idx;
+            if (count == 6) break;
         }
 
-        var newT = new List<int>();
-        for (int i = 0; i < T.Length; i += 3)
+        if (count < 2) return mid; // Sécurité
+
+        Vector3 butterfly = 0.5f * (p0 + p1);
+        butterfly += 0.125f * (opp[0] + opp[1]);
+        if (count >= 6)
+            butterfly -= 0.0625f * (opp[2] + opp[3] + opp[4] + opp[5]);
+
+        return butterfly;
+    }
+
+    Vector3 AverageNeighbor(Vector3[] verts, Dictionary<int, List<int>> triangleMap, int idx)
+    {
+        HashSet<int> neighbors = new();
+        foreach (int tri in triangleMap[idx])
         {
-            int a = T[i], b = T[i + 1], c = T[i + 2];
-            int ab = edgeToNew[new Edge(a, b)];
-            int bc = edgeToNew[new Edge(b, c)];
-            int ca = edgeToNew[new Edge(c, a)];
-            newT.AddRange(new[] { a, ab, ca, b, bc, ab, c, ca, bc, ab, bc, ca });
+            int[] face = GetTriangleVerts(tri, triangleMap);
+            foreach (int v in face) if (v != idx) neighbors.Add(v);
         }
-
-        Mesh newMesh = new Mesh();
-        newMesh.vertices = newV.ToArray();
-        newMesh.triangles = newT.ToArray();
-        newMesh.RecalculateNormals();
-        return newMesh;
-    }
-
-    static void AddNeigh(Dictionary<int, HashSet<int>> d, int a, int b)
-    {
-        if (!d.ContainsKey(a)) d[a] = new HashSet<int>();
-        if (!d.ContainsKey(b)) d[b] = new HashSet<int>();
-        d[a].Add(b); d[b].Add(a);
-    }
-
-    static void AddOpp(Dictionary<Edge, List<int>> d, Edge e, int opp)
-    {
-        if (!d.ContainsKey(e)) d[e] = new List<int>();
-        if (d[e].Count < 2) d[e].Add(opp);
-    }
-
-    static List<int> FindEFGH(Edge edge, int C, int D, Dictionary<Edge, List<int>> edgeOpp)
-    {
-        List<int> result = new List<int>(4);
-        Edge eAC = new Edge(edge.v1, C);
-        Edge eAD = new Edge(edge.v1, D);
-        Edge eBC = new Edge(edge.v2, C);
-        Edge eBD = new Edge(edge.v2, D);
-        int E = OppOther(eAC, C, edgeOpp);
-        int F = OppOther(eAD, D, edgeOpp);
-        int G = OppOther(eBC, C, edgeOpp);
-        int H = OppOther(eBD, D, edgeOpp);
-        if (E != -1 && F != -1 && G != -1 && H != -1)
-            result.AddRange(new[] { E, F, G, H });
-        return result;
-    }
-
-    static int OppOther(Edge e, int known, Dictionary<Edge, List<int>> d)
-    {
-        if (d.TryGetValue(e, out var ls) && ls.Count == 2)
-            return ls[0] == known ? ls[1] : ls[0];
-        return -1;
-    }
-
-    static Vector3 AverageNeighbors(Vector3[] V, HashSet<int> neigh, int i)
-    {
         Vector3 sum = Vector3.zero;
-        foreach (int j in neigh) sum += V[j];
-        return sum / Mathf.Max(1, neigh.Count);
+        foreach (int v in neighbors) sum += verts[v];
+        return neighbors.Count > 0 ? sum / neighbors.Count : verts[idx];
     }
 
-    struct Edge { public int v1, v2;
-        public Edge(int a, int b) { v1 = Mathf.Min(a, b); v2 = Mathf.Max(a, b); }
-    }
-    class EdgeComparer : IEqualityComparer<Edge>
+    int[] GetTriangleVerts(int triIndex, Dictionary<int, List<int>> triangleMap)
     {
-        public bool Equals(Edge x, Edge y) => x.v1 == y.v1 && x.v2 == y.v2;
-        public int GetHashCode(Edge e) => e.v1 * 73856093 ^ e.v2 * 19349669;
+        foreach (var kvp in triangleMap)
+        {
+            foreach (int t in kvp.Value)
+                if (t == triIndex) return new int[] { kvp.Key };
+        }
+        return new int[0];
+    }
+
+    void AddTriangle(Dictionary<int, List<int>> map, int vertexIndex, int triangleIndex)
+    {
+        if (!map.ContainsKey(vertexIndex))
+            map[vertexIndex] = new List<int>();
+        map[vertexIndex].Add(triangleIndex);
     }
 }
-
-public struct Edge
-{
-    public int v1, v2;
-
-    public Edge(int a, int b)
-    {
-        v1 = Mathf.Min(a, b);
-        v2 = Mathf.Max(a, b);
-    }
-
-    public override bool Equals(object obj)
-    {
-        if (!(obj is Edge)) return false;
-        Edge other = (Edge)obj;
-        return v1 == other.v1 && v2 == other.v2;
-    }
-
-    public override int GetHashCode()
-    {
-        return v1 * 31 + v2;
-    }
-}
-
-public class EdgeComparer : IEqualityComparer<Edge>
-{
-    public bool Equals(Edge x, Edge y) => x.v1 == y.v1 && x.v2 == y.v2;
-    public int GetHashCode(Edge obj) => obj.GetHashCode();
-}
-
