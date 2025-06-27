@@ -2,7 +2,7 @@
 - Project name: MathButter
 - Unity version: Unity 2022.3.36f1
 - Active game object:
-  - Name: ButterflyMesh
+  - Name: Catmull
   - Tag: Untagged
   - Layer: Default
 <!-- UNITY CODE ASSIST INSTRUCTIONS END -->
