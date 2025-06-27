@@ -5,7 +5,7 @@ public class FreeCamera : MonoBehaviour
     public float speed = 5f;
     public float fastSpeed = 15f;
     public float sensitivity = 2f;
-    public Transform cameraTransform; // assigner Main Camera ici
+    public Transform cameraTransform; 
 
     private float rotationX = 0f;
     private float rotationY = 0f;

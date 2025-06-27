@@ -1,10 +1,4 @@
-﻿// ✅ ButterflySubdivision.cs CORRIGÉ - Version avec Icosaèdre
-// - Implémentation correcte et testée du masque Butterfly
-// - Gestion robuste de la connectivité sans bugs
-// - Subdivision propre en 4 triangles
-// - Ajout du mesh Icosaèdre
-
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
 
@@ -69,6 +63,7 @@ public class ButterflySubdivision : MonoBehaviour
     // ================================================================================
     // ► Méthodes publiques
     // ================================================================================
+
     [ContextMenu("Apply Subdivision")]
     public void ApplySubdivision()
     {
@@ -102,7 +97,7 @@ public class ButterflySubdivision : MonoBehaviour
     }
 
     // ================================================================================
-    // ► BUTTERFLY SUBDIVISION CORRIGÉE - VERSION SIMPLE
+    // ButterFly Subdivision
     // ================================================================================
     public Mesh SubdivideButterfly(Mesh input)
     {
@@ -110,7 +105,7 @@ public class ButterflySubdivision : MonoBehaviour
         int[] triangles = input.triangles.ToArray();
 
 
-        // Construire une table de connectivité simple mais efficace
+        // Construire une table de connectivité simple 
         var edgeToTriangles = BuildEdgeTriangleMap(triangles);
         var vertexToVertices = BuildVertexNeighborMap(triangles, vertices.Length);
 
@@ -157,7 +152,7 @@ public class ButterflySubdivision : MonoBehaviour
     }
 
     // ================================================================================
-    // ► CONSTRUCTION DE LA CONNECTIVITÉ SIMPLE
+    // CONSTRUCTION DE LA CONNECTIVITÉ SIMPLE
     // ================================================================================
     private Dictionary<(int, int), List<int>> BuildEdgeTriangleMap(int[] triangles)
     {
@@ -315,79 +310,6 @@ public class ButterflySubdivision : MonoBehaviour
 
 
 
-
-    private Vector3 CalculateBoundaryMidpoint(int v1, int v2, Vector3[] vertices, Dictionary<int, HashSet<int>> vertexToVertices)
-    {
-        Vector3 p1 = vertices[v1];
-        Vector3 p2 = vertices[v2];
-
-        // Point médian de base (interpolation linéaire)
-        Vector3 midpoint = 0.5f * (p1 + p2);
-
-        // Moyenne douce des voisins des deux extrémités
-        Vector3 avgNeighbor = Vector3.zero;
-        int count = 0;
-
-        foreach (int neighbor in vertexToVertices[v1])
-        {
-            if (neighbor != v2)
-            {
-                avgNeighbor += vertices[neighbor];
-                count++;
-            }
-        }
-
-        foreach (int neighbor in vertexToVertices[v2])
-        {
-            if (neighbor != v1)
-            {
-                avgNeighbor += vertices[neighbor];
-                count++;
-            }
-        }
-
-        if (count > 0)
-        {
-            avgNeighbor /= count;
-            // Pèse le point vers ses voisins pour éviter l’"effet piquant"
-            midpoint = (0.75f * midpoint + 0.25f * avgNeighbor);
-        }
-
-        return midpoint;
-    }
-
-
-    private Vector3 CalculateStableBoundaryMidpoint(int v1, int v2, Vector3[] vertices,
-    Dictionary<int, HashSet<int>> vertexToVertices)
-    {
-        Vector3 p1 = vertices[v1];
-        Vector3 p2 = vertices[v2];
-        Vector3 midpoint = 0.5f * (p1 + p2);
-
-        // Moyenne douce des voisins directs
-        Vector3 avgNeighbor = Vector3.zero;
-        int count = 0;
-
-        foreach (int n in vertexToVertices[v1])
-        {
-            if (n != v2) { avgNeighbor += vertices[n]; count++; }
-        }
-        foreach (int n in vertexToVertices[v2])
-        {
-            if (n != v1) { avgNeighbor += vertices[n]; count++; }
-        }
-
-        if (count > 0)
-        {
-            avgNeighbor /= count;
-            midpoint = (0.75f * midpoint + 0.25f * avgNeighbor); // Pèse vers le centre
-        }
-
-        return midpoint;
-    }
-
-
-
     // ================================================================================
     // ► MÉTHODES D'INTERFACE ET UTILITAIRES
     // ================================================================================
@@ -476,7 +398,7 @@ public class ButterflySubdivision : MonoBehaviour
     }
 
     // ================================================================================
-    // ► CRÉATION DES MESHES DE BASE
+    // CRÉATION DES MESHES DE BASE
     // ================================================================================
     Mesh CreateQuad()
     {
@@ -570,16 +492,15 @@ public class ButterflySubdivision : MonoBehaviour
 
 
 
-    // ► NOUVEAU : Création d'un Icosaèdre
+    // Création d'un Icosaèdre
     Mesh CreateIcosahedron(float radius)
     {
         Mesh mesh = new Mesh { name = "Icosahedron" };
 
-        // Ratio d'or (golden ratio)
+        
         float phi = (1f + Mathf.Sqrt(5f)) / 2f;
 
-        // Les 12 vertices d'un icosaèdre régulier
-        // Normalisés pour être sur une sphère de rayon 1, puis multipliés par le rayon désiré
+        
         Vector3[] vertices = new Vector3[]
         {
             // Rectangle dans le plan XY

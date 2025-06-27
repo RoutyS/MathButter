@@ -6,8 +6,8 @@ using static Unity.VisualScripting.Member;
 public class LineDrawer : MonoBehaviour
 {
     [Header("Réglages")]
-    public float clickDepth = 5f;            // Distance depuis la caméra
-    public int chaikinIterations = 3;      // Nb d’itérations de lissage
+    public float clickDepth = 5f;            
+    public int chaikinIterations = 3;      
 
     [Header("Visuels")]
     public GameObject pointPrefab;
@@ -88,36 +88,6 @@ public class LineDrawer : MonoBehaviour
             ClearPoints();    // NEW : méthode maintenant présente
         }
 
-        // Touche S : Appliquer Butterfly sur la surface Coons
-        /*if (Input.GetKeyDown(KeyCode.B))
-        {
-            GameObject coons = GameObject.Find("CoonsMesh");
-            if (coons != null)
-            {
-                ButterflySubdivision butterfly = FindObjectOfType<ButterflySubdivision>();
-                if (butterfly != null)
-                {
-                    MeshFilter mf = coons.GetComponent<MeshFilter>();
-
-                    int levels = 1;
-                    Mesh m = mf.sharedMesh;
-                    for (int i = 0; i < levels; i++)
-                        m = butterfly.SubdivideButterfly(m);
-                    mf.sharedMesh = m;
-
-                    Debug.Log("✅ CoonsMesh subdivisé automatiquement !");
-                }
-                else
-                {
-                    Debug.LogWarning("Aucun script ButterflySubdivision trouvé.");
-                }
-            }
-            else
-            {
-                Debug.LogWarning("❌ Aucun objet nommé 'CoonsMesh' trouvé !");
-            }
-        }*/
-
 
     }
 
@@ -164,9 +134,9 @@ public class LineDrawer : MonoBehaviour
 
 
     // ------------------------------------------------------------------
-    //  APPEL PUBLIC : génère la courbe Chaikin et l’affiche
+    //  génère la courbe Chaikin et l’affiche
     // ------------------------------------------------------------------
-    // ------------------- AJOUT / REMPLACEMENT complet -------------------
+    
     void ApplyChaikin()
     {
         if (originalPoints.Count < 2) return;
@@ -183,12 +153,12 @@ public class LineDrawer : MonoBehaviour
         // Stockage avec orientation corrigée
         switch (coonsEdges.Count)
         {
-            case 0: // Bordure BAS : gauche → droite (OK)
+            case 0: // Bordure BAS : gauche → droite
                 coonsEdges.Add(new List<Vector3>(smooth));
                 Debug.Log($"✔ Bordure BAS ajoutée : {smooth[0]} → {smooth[smooth.Count - 1]}");
                 break;
 
-            case 1: // Bordure DROITE : bas → haut (OK) 
+            case 1: // Bordure DROITE : bas → haut 
                 coonsEdges.Add(new List<Vector3>(smooth));
                 Debug.Log($"✔ Bordure DROITE ajoutée : {smooth[0]} → {smooth[smooth.Count - 1]}");
                 break;
@@ -245,8 +215,8 @@ public class LineDrawer : MonoBehaviour
         // Vérification des coins pour déboguer
         Vector3 p00 = edges[0][0];                    // coin bas-gauche
         Vector3 p01 = edges[0][resolution - 1];       // coin bas-droite  
-        Vector3 p10 = edges[2][resolution - 1];       // coin haut-droite (ATTENTION: inversé)
-        Vector3 p11 = edges[2][0];                    // coin haut-gauche (ATTENTION: inversé)
+        Vector3 p10 = edges[2][resolution - 1];       // coin haut-droite 
+        Vector3 p11 = edges[2][0];                    // coin haut-gauche 
 
         Debug.Log($"Coins de contrôle:");
         Debug.Log($"P00 (bas-gauche): {p00}");
@@ -272,14 +242,12 @@ public class LineDrawer : MonoBehaviour
                 float v = j / (float)(resolution - 1);
 
                 // Évaluation des courbes de bordure
-                Vector3 c0 = EvaluateCurveAtParameter(edges[0], u);  // bordure bas (u varie)
-                Vector3 c1 = EvaluateCurveAtParameter(edges[2], u);  // bordure haut (u varie, mais inversée)
-                Vector3 d0 = EvaluateCurveAtParameter(edges[3], v);  // bordure gauche (v varie, mais inversée) 
-                Vector3 d1 = EvaluateCurveAtParameter(edges[1], v);  // bordure droite (v varie)
+                Vector3 c0 = EvaluateCurveAtParameter(edges[0], u);  // bordure bas 
+                Vector3 c1 = EvaluateCurveAtParameter(edges[2], u);  // bordure haut 
+                Vector3 d0 = EvaluateCurveAtParameter(edges[3], v);  // bordure gauche  
+                Vector3 d1 = EvaluateCurveAtParameter(edges[1], v);  // bordure droite 
 
-                // FORMULE DE COONS CORRIGÉE
-                // S(u,v) = (1-v)*c0(u) + v*c1(u) + (1-u)*d0(v) + u*d1(v) 
-                //          - [(1-u)*(1-v)*P00 + u*(1-v)*P01 + (1-u)*v*P11 + u*v*P10]
+                
 
                 Vector3 ruled_uv = (1 - v) * c0 + v * c1;           // interpolation entre bordures bas/haut
                 Vector3 ruled_vu = (1 - u) * d0 + u * d1;           // interpolation entre bordures gauche/droite
@@ -322,8 +290,9 @@ public class LineDrawer : MonoBehaviour
         return Vector3.Lerp(curve[baseIndex], curve[baseIndex + 1], localT);
     }
 
-
+    // ------------------------------------------------------------------
     // Interpolation linéaire dans une liste de points
+    // ------------------------------------------------------------------
     Vector3 EvaluateCurve(List<Vector3> curve, float t)
     {
         int count = curve.Count;
@@ -379,7 +348,7 @@ public class LineDrawer : MonoBehaviour
             }
         }
 
-        // Crée le mesh Unity
+        // Crée le mesh 
         GameObject coons = new GameObject("CoonsMesh", typeof(MeshFilter), typeof(MeshRenderer));
         Mesh mesh = new Mesh();
         mesh.vertices = vertices;
@@ -392,23 +361,8 @@ public class LineDrawer : MonoBehaviour
         mat.color = Color.cyan;
         coons.GetComponent<MeshRenderer>().material = mat;
 
-        // ✅ Appliquer Butterfly immédiatement
-        /*ButterflySubdivision butterfly = FindObjectOfType<ButterflySubdivision>();
-        if (butterfly != null)
-        {
-            MeshFilter mf = coons.GetComponent<MeshFilter>();
-            int levels = 1;   // Choisis ici combien de fois tu veux subdiviser
-            Mesh m = mf.sharedMesh;
-            for (int i = 0; i < levels; i++)
-                m = butterfly.SubdivideButterfly(m);
-            mf.sharedMesh = m;
-
-            mf.sharedMesh = butterfly.SubdivideButterfly(mf.sharedMesh);
-            Debug.Log("✅ Subdivision appliquée automatiquement au CoonsMesh nouvellement créé");
-        }*/
+      
     }
-
-
 
 
     // ------------------------------------------------------------------
@@ -455,8 +409,8 @@ public class LineDrawer : MonoBehaviour
                 originalPoints.Insert(0, forcedStart);
 
             // Forcer la fin avec homothétie
-            Vector3 lastPoint = originalPoints[originalPoints.Count - 1];           // point cliqué par l’utilisateur
-            Vector3 beforeLast = originalPoints[originalPoints.Count - 2];          // point précédent
+            Vector3 lastPoint = originalPoints[originalPoints.Count - 1];           
+            Vector3 beforeLast = originalPoints[originalPoints.Count - 2];         
             Vector3 target = finalEndPoint.Value;
 
             float lambda = 1f; // 1 → point exactement au bon endroit
@@ -466,7 +420,7 @@ public class LineDrawer : MonoBehaviour
             originalPoints[originalPoints.Count - 1] = adjusted;
             CreatePointSphere(adjusted, Color.red);
 
-            Debug.Log($"✅ Dernier point replacé par homothétie vers {target}");
+            Debug.Log($" Dernier point replacé par homothétie vers {target}");
         }
 
 
@@ -483,14 +437,8 @@ public class LineDrawer : MonoBehaviour
     }
 
 
-
-
-
-
-
-
     // ------------------------------------------------------------------
-    //  ALGO Chaikin (private) – renvoie une nouvelle liste de points
+    //  ALGO Chaikin – renvoie une nouvelle liste de points
     // ------------------------------------------------------------------
     List<Vector3> ChaikinSubdivision(List<Vector3> input, int iterations)
     {
@@ -500,7 +448,7 @@ public class LineDrawer : MonoBehaviour
         {
             List<Vector3> next = new List<Vector3>();
 
-            // ✅ CONSERVER le premier point
+            // CONSERVER le premier point
             next.Add(pts[0]);
 
             // Générer les points intermédiaires
@@ -509,14 +457,14 @@ public class LineDrawer : MonoBehaviour
                 Vector3 p0 = pts[i];
                 Vector3 p1 = pts[i + 1];
 
-                Vector3 Q = Vector3.Lerp(p0, p1, 0.25f); // 75% p0 + 25% p1
-                Vector3 R = Vector3.Lerp(p0, p1, 0.75f); // 25% p0 + 75% p1
+                Vector3 Q = Vector3.Lerp(p0, p1, 0.25f);
+                Vector3 R = Vector3.Lerp(p0, p1, 0.75f); 
 
                 next.Add(Q);
                 next.Add(R);
             }
 
-            // ✅ CONSERVER le dernier point
+            // CONSERVER le dernier point
             next.Add(pts[pts.Count - 1]);
 
             pts = next;
