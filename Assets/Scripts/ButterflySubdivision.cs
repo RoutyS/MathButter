@@ -207,7 +207,7 @@ public class ButterflySubdivision : MonoBehaviour
     }
 
     // ================================================================================
-    // ► CALCUL DU MIDPOINT BUTTERFLY
+    // CALCUL DU MIDPOINT BUTTERFLY
     // ================================================================================
     private int GetOrCreateButterflyMidpoint(int v1, int v2, Vector3[] vertices, int[] triangles,
         Dictionary<(int, int), List<int>> edgeToTriangles,
@@ -228,7 +228,7 @@ public class ButterflySubdivision : MonoBehaviour
         return newIndex;
     }
 
-    // ✅ Script avec gestion des 6 cas d'exception du Butterfly
+    //6 cas d'exception du Butterfly
     private Vector3 CalculateButterflyMidpoint(int v1, int v2,
     Vector3[] vertices, int[] triangles,
     Dictionary<(int, int), List<int>> edgeToTriangles,
@@ -251,9 +251,9 @@ public class ButterflySubdivision : MonoBehaviour
         Vector3 p2 = vertices[v2];
 
         // ─────────────────────────────────────────────────────────────────
-        // 1) DÉTECTION DE BORD
-        //    → Une arête est “bord” si UN SEUL triangle      (cas classique)
-        //      ou si AU MOINS UN de ses sommets est bord (nouveaux sommets)
+        //    1.DÉTECTION DE BORD
+        //    Une arête est “bord” si UN SEUL triangle      (cas classique)
+        //    ou si AU MOINS UN de ses sommets est bord (nouveaux sommets)
         // ─────────────────────────────────────────────────────────────────
         bool edgeHasOneTri = !edgeToTriangles.ContainsKey(edge) || edgeToTriangles[edge].Count == 1;
         bool isBoundary = edgeHasOneTri || IsBoundaryVertex(v1) || IsBoundaryVertex(v2);
@@ -265,7 +265,7 @@ public class ButterflySubdivision : MonoBehaviour
         }
 
         // ─────────────────────────────────────────────────────────────────
-        // 2) CAS INTERNES (Butterfly complet ou partiel)
+        //  2.CAS INTERNES (Butterfly complet ou partiel)
         // ─────────────────────────────────────────────────────────────────
         List<int> adjTris = edgeToTriangles[edge];
         List<int> opposite = new List<int>();
@@ -311,7 +311,7 @@ public class ButterflySubdivision : MonoBehaviour
 
 
     // ================================================================================
-    // ► MÉTHODES D'INTERFACE ET UTILITAIRES
+    // MÉTHODES D'INTERFACE ET UTILITAIRES
     // ================================================================================
     void SetupMesh()
     {
@@ -523,7 +523,7 @@ public class ButterflySubdivision : MonoBehaviour
         };
 
         // Les 20 faces triangulaires de l'icosaèdre
-        // Chaque triplet définit un triangle avec l'orientation correcte (sens anti-horaire)
+        
         int[] triangles = new int[]
         {
             // 5 faces autour du point 0 (vertex du haut)
